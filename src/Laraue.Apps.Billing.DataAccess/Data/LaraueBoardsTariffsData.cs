@@ -9,7 +9,7 @@ public static class LaraueBoardsTariffsData
         new(
             new Tariff
             {
-                BillingPeriod = BillingPeriod.Monthly,
+                BillingPeriod = BillingPeriod.Month,
                 Code = "personal_free",
                 Id = TariffId.LaraueBoardsPersonalFree,
                 IncludedTokensCount = 0,
@@ -28,7 +28,7 @@ public static class LaraueBoardsTariffsData
         new(
             new Tariff
             {
-                BillingPeriod = BillingPeriod.Monthly,
+                BillingPeriod = BillingPeriod.Month,
                 Code = "personal_plus",
                 Id = TariffId.LaraueBoardsPersonalPlus,
                 IncludedTokensCount = 300_000,
@@ -47,7 +47,7 @@ public static class LaraueBoardsTariffsData
         new(
             new Tariff
             {
-                BillingPeriod = BillingPeriod.Monthly,
+                BillingPeriod = BillingPeriod.Month,
                 Code = "team_free",
                 Id = TariffId.LaraueBoardsTeamFree,
                 IncludedTokensCount = 0,
@@ -65,7 +65,7 @@ public static class LaraueBoardsTariffsData
         new(
             new Tariff
             {
-                BillingPeriod = BillingPeriod.Monthly,
+                BillingPeriod = BillingPeriod.Month,
                 Code = "team",
                 Id = TariffId.LaraueBoardsTeam,
                 IncludedTokensCount = 750_000,
@@ -83,7 +83,7 @@ public static class LaraueBoardsTariffsData
         new(
             new Tariff
             {
-                BillingPeriod = BillingPeriod.Monthly,
+                BillingPeriod = BillingPeriod.Month,
                 Code = "team_business",
                 Id = TariffId.LaraueBoardsTeamBusiness,
                 IncludedTokensCount = 2_500_000,

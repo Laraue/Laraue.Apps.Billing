@@ -18,7 +18,7 @@ public class Tariff
 
 public enum BillingPeriod
 {
-    Monthly,
+    Month,
 }
 
 public enum TariffType

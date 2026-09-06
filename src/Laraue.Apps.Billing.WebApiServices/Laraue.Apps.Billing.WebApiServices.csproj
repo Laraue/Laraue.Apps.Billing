@@ -11,18 +11,18 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Compile Remove="Resources\Errors.Designer.cs" />
+      <EmbeddedResource Update="Resources\Errors.resx">
+        <Generator>ResXFileCodeGenerator</Generator>
+        <LastGenOutput>Errors.Designer.cs</LastGenOutput>
+      </EmbeddedResource>
     </ItemGroup>
 
     <ItemGroup>
-      <EmbeddedResource Update="Resources\Errors.resx">
-        <Generator>PublicResXFileCodeGenerator</Generator>
-        <LastGenOutput>Errors.Designer.cs</LastGenOutput>
-        <StronglyTypedFileName>Resources\Errors.Designer.cs</StronglyTypedFileName>
-        <StronglyTypedLanguage>CSharp</StronglyTypedLanguage>
-        <StronglyTypedNamespace>Laraue.Apps.Billing.WebApiServices.Resources</StronglyTypedNamespace>
-        <StronglyTypedClassName>Errors</StronglyTypedClassName>
-      </EmbeddedResource>
+      <Compile Update="Resources\Errors.Designer.cs">
+        <DesignTime>True</DesignTime>
+        <AutoGen>True</AutoGen>
+        <DependentUpon>Errors.resx</DependentUpon>
+      </Compile>
     </ItemGroup>
 
 </Project>

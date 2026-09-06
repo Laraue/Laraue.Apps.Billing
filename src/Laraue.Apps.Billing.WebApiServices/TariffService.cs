@@ -1,3 +1,4 @@
+using System.Globalization;
 using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.DataAccess.Entities;
 using Laraue.Apps.Billing.WebApiServices.Resources;
@@ -22,14 +23,16 @@ public class TariffService(DatabaseContext context) : ITariffService
         GetServiceTariffsRequest request,
         CancellationToken cancellationToken)
     {
+        var currencyCode = request.CurrencyCode.ToUpper();
+        
         var currencyRate = await context.CurrencyRates
-            .SingleOrDefaultAsync(x => x.Code == request.CurrencyCode, cancellationToken);
+            .SingleOrDefaultAsync(x => x.Code == currencyCode, cancellationToken);
 
         if (currencyRate is null)
         {
             throw new BadRequestException(
                 nameof(request.CurrencyCode),
-                string.Format(Errors.CurrencyRateNotFound, request.CurrencyCode));
+                string.Format(Errors.CurrencyRateNotFound, currencyCode));
         }
 
         var personalSubscriptions = await GetPersonalSubscriptionsAsync(request.ServiceId, currencyRate, cancellationToken);
@@ -62,11 +65,12 @@ public class TariffService(DatabaseContext context) : ITariffService
         return GetSubscriptionsAsync(
             tariffIds,
             currencyRate,
-            (price, formattedPrice, billingPeriod) => new PersonalSubscription
+            (id, price, formattedPrice, billingPeriod) => new PersonalSubscription
             {
+                Id = id,
                 Price = price,
                 FormattedPrice = formattedPrice,
-                Duration = 1,
+                BillingDuration = 1,
                 BillingPeriod = billingPeriod,
             },
             cancellationToken);
@@ -89,11 +93,12 @@ public class TariffService(DatabaseContext context) : ITariffService
         return GetSubscriptionsAsync(
             tariffIds,
             currencyRate,
-            (price, formattedPrice, billingPeriod) => new TeamSubscription
+            (id, price, formattedPrice, billingPeriod) => new TeamSubscription
             {
+                Id = id,
                 Price = price,
                 FormattedPrice = formattedPrice,
-                Duration = 1,
+                BillingDuration = 1,
                 BillingPeriod = billingPeriod,
             },
             cancellationToken);
@@ -102,20 +107,22 @@ public class TariffService(DatabaseContext context) : ITariffService
     private async Task<List<TSubscription>> GetSubscriptionsAsync<TSubscription>(
         IQueryable<TariffId> tariffIds,
         CurrencyRate currencyRate,
-        Func<decimal, string, BillingPeriod, TSubscription> createSubscription,
+        Func<TariffId, decimal, string, BillingPeriod, TSubscription> createSubscription,
         CancellationToken cancellationToken)
         where TSubscription : Subscription
     {
         var tariffs = await context.Tariffs
             .Where(x => x.IsActive)
-            .Join(tariffIds, t => t.Id, id => id, (t, _) => new { t.Price, t.BillingPeriod })
+            .Join(tariffIds, t => t.Id, id => id, (t, _) => new { t.Id, t.Price, t.BillingPeriod })
             .ToListAsync(cancellationToken);
 
         return tariffs
             .Select(x => createSubscription(
+                x.Id,
                 ConvertPrice(x.Price, currencyRate),
                 FormatPrice(x.Price, currencyRate),
                 x.BillingPeriod))
+            .OrderByDescending(x => x.Price)
             .ToList();
     }
 
@@ -123,28 +130,64 @@ public class TariffService(DatabaseContext context) : ITariffService
     {
         var tokenPacks = await context.TokenPacks
             .Where(x => x.IsActive)
-            .Select(x => new { x.Price, x.TokensCount, x.ExpirationDuration })
+            .Select(x => new { x.Id, x.Price, x.TokensCount, x.ExpirationDuration })
             .ToListAsync(cancellationToken);
 
         return tokenPacks
             .Select(x => new TokenPack
             {
+                Id = x.Id,
                 Price = ConvertPrice(x.Price, currencyRate),
                 FormattedPrice = FormatPrice(x.Price, currencyRate),
                 Amount = x.TokensCount,
                 ExpirationDuration = x.ExpirationDuration,
             })
+            .OrderByDescending(x => x.Price)
             .ToList();
     }
 
-    private static decimal ConvertPrice(int priceInUsdCents, CurrencyRate currencyRate) =>
-        priceInUsdCents / 100m / currencyRate.RateToUsd;
+    private static decimal ConvertPrice(int priceInUsdCents, CurrencyRate currencyRate)
+    {
+        var amount = priceInUsdCents / 100m / currencyRate.RateToUsd;
+
+        return RoundPrice(amount, currencyRate);
+    }
+
+    private static decimal RoundPrice(decimal amount, CurrencyRate currencyRate)
+    {
+        var step = currencyRate.RoundingStep;
+        var steps = amount / step;
+
+        var roundedSteps = currencyRate.RoundingMode switch
+        {
+            RoundingMode.Up => Math.Ceiling(steps),
+            RoundingMode.Down => Math.Floor(steps),
+            _ => Math.Round(steps, MidpointRounding.AwayFromZero),
+        };
+
+        return roundedSteps * step;
+    }
 
     private static string FormatPrice(int priceInUsdCents, CurrencyRate currencyRate)
     {
         var amount = ConvertPrice(priceInUsdCents, currencyRate);
+        var decimals = GetDecimalPlaces(currencyRate.RoundingStep);
 
-        return $"{amount:0.00} {currencyRate.Code}";
+        return $"{amount.ToString("F" + decimals, CultureInfo.InvariantCulture)} {currencyRate.Code}";
+    }
+
+    private static int GetDecimalPlaces(decimal step)
+    {
+        step = Math.Abs(step);
+
+        var decimals = 0;
+        while (step != Math.Floor(step) && decimals < 10)
+        {
+            step *= 10;
+            decimals++;
+        }
+
+        return decimals;
     }
 }
 
@@ -169,20 +212,23 @@ public abstract record Tariff
 
 public abstract record Subscription : Tariff
 {
-    public int Duration { get; set; }
+    public int BillingDuration { get; set; }
     public BillingPeriod BillingPeriod { get; set; }
 }
 
 public record PersonalSubscription : Subscription
 {
+    public required TariffId Id { get; set; }
 }
 
 public record TeamSubscription : Subscription
 {
+    public required TariffId Id { get; set; }
 }
 
 public record TokenPack : Tariff
 {
+    public required Guid Id { get; set; }
     public long Amount { get; set; }
     public TimeSpan ExpirationDuration { get; set; }
 }

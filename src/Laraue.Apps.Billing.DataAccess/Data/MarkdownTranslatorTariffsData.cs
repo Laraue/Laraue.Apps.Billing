@@ -10,7 +10,7 @@ public static class MarkdownTranslatorTariffsData
         new(
             new Tariff
             {
-                BillingPeriod = BillingPeriod.Monthly,
+                BillingPeriod = BillingPeriod.Month,
                 Code = "free",
                 Id = TariffId.MarkdownTranslatorFree,
                 IncludedTokensCount = 0,
@@ -28,7 +28,7 @@ public static class MarkdownTranslatorTariffsData
         new(
             new Tariff
             {
-                BillingPeriod = BillingPeriod.Monthly,
+                BillingPeriod = BillingPeriod.Month,
                 Code = "plus",
                 Id = TariffId.MarkdownTranslatorPlus,
                 IncludedTokensCount = 300_000,
@@ -46,7 +46,7 @@ public static class MarkdownTranslatorTariffsData
         new(
             new Tariff
             {
-                BillingPeriod = BillingPeriod.Monthly,
+                BillingPeriod = BillingPeriod.Month,
                 Code = "pro",
                 Id = TariffId.MarkdownTranslatorPro,
                 IncludedTokensCount = 1_200_000,
