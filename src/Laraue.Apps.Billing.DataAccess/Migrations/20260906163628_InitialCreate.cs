@@ -45,6 +45,7 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     code = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
+                    symbol = table.Column<string>(type: "character varying(3)", maxLength: 3, nullable: false),
                     rate_to_usd = table.Column<decimal>(type: "numeric", nullable: false),
                     rounding_step = table.Column<decimal>(type: "numeric", nullable: false),
                     rounding_mode = table.Column<int>(type: "integer", nullable: false)
@@ -282,11 +283,11 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
 
             migrationBuilder.InsertData(
                 table: "currency_rates",
-                columns: new[] { "id", "code", "rate_to_usd", "rounding_mode", "rounding_step" },
+                columns: new[] { "id", "code", "rate_to_usd", "rounding_mode", "rounding_step", "symbol" },
                 values: new object[,]
                 {
-                    { new Guid("d8b3db18-09f8-4cd8-b4b8-c6d4402e2292"), "RUB", 0.012m, 1, 1m },
-                    { new Guid("e3f15a99-c08e-420c-9aca-8bd35a13b4ec"), "USD", 1m, 0, 0.01m }
+                    { new Guid("d8b3db18-09f8-4cd8-b4b8-c6d4402e2292"), "RUB", 0.012m, 1, 1m, "₽" },
+                    { new Guid("e3f15a99-c08e-420c-9aca-8bd35a13b4ec"), "USD", 1m, 0, 0.01m, "$" }
                 });
 
             migrationBuilder.InsertData(

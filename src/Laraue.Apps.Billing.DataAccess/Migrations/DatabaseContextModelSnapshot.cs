@@ -85,6 +85,12 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("numeric")
                         .HasColumnName("rounding_step");
 
+                    b.Property<string>("Symbol")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("symbol");
+
                     b.HasKey("Id")
                         .HasName("pk_currency_rates");
 
@@ -97,7 +103,8 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                             Code = "USD",
                             RateToUsd = 1m,
                             RoundingMode = 0,
-                            RoundingStep = 0.01m
+                            RoundingStep = 0.01m,
+                            Symbol = "$"
                         },
                         new
                         {
@@ -105,7 +112,8 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                             Code = "RUB",
                             RateToUsd = 0.012m,
                             RoundingMode = 1,
-                            RoundingStep = 1m
+                            RoundingStep = 1m,
+                            Symbol = "₽"
                         });
                 });
 

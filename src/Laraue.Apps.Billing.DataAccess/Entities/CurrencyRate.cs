@@ -8,6 +8,9 @@ public class CurrencyRate
 
     [MaxLength(3)]
     public required string Code { get; set; }
+
+    [MaxLength(3)]
+    public required string Symbol { get; set; }
     public required decimal RateToUsd { get; set; }
 
     public required decimal RoundingStep { get; set; }

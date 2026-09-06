@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json.Serialization;
 using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.DataAccess.Entities;
 using Laraue.Apps.Billing.WebApiServices.Resources;
@@ -24,7 +25,7 @@ public class TariffService(DatabaseContext context) : ITariffService
         CancellationToken cancellationToken)
     {
         var currencyCode = request.CurrencyCode.ToUpper();
-        
+
         var currencyRate = await context.CurrencyRates
             .SingleOrDefaultAsync(x => x.Code == currencyCode, cancellationToken);
 
@@ -38,13 +39,10 @@ public class TariffService(DatabaseContext context) : ITariffService
         var personalSubscriptions = await GetPersonalSubscriptionsAsync(request.ServiceId, currencyRate, cancellationToken);
         var teamSubscriptions = await GetTeamSubscriptionsAsync(request.ServiceId, currencyRate, cancellationToken);
 
-        var tokenPacks = await GetTokenPacksAsync(currencyRate, cancellationToken);
-
         return new GetServiceTariffsResponse
         {
             PersonalSubscriptions = personalSubscriptions,
             TeamSubscriptions = teamSubscriptions,
-            TokenPacks = tokenPacks,
         };
     }
 
@@ -53,28 +51,14 @@ public class TariffService(DatabaseContext context) : ITariffService
         CurrencyRate currencyRate,
         CancellationToken cancellationToken)
     {
-        var tariffIds = serviceId switch
+        return serviceId switch
         {
-            ServiceId.LaraueBoards => context.LaraueBoardsPersonalTariffs.Select(x => x.Id),
-            ServiceId.MarkdownTranslator => context.MarkdownTranslatorPersonalTariffs.Select(x => x.Id),
+            ServiceId.LaraueBoards => GetLaraueBoardsPersonalSubscriptionsAsync(currencyRate, cancellationToken),
+            ServiceId.MarkdownTranslator => GetMarkdownTranslatorPersonalSubscriptionsAsync(currencyRate, cancellationToken),
             _ => throw new BadRequestException(
                 nameof(GetServiceTariffsRequest.ServiceId),
                 string.Format(Errors.UnknownService, serviceId)),
         };
-
-        return GetSubscriptionsAsync(
-            tariffIds,
-            currencyRate,
-            (id, title, price, formattedPrice, billingPeriod) => new PersonalSubscription
-            {
-                Id = id,
-                Title = title,
-                Price = price,
-                FormattedPrice = formattedPrice,
-                BillingDuration = billingPeriod == BillingPeriod.Forever ? null : 1,
-                BillingPeriod = billingPeriod,
-            },
-            cancellationToken);
     }
 
     private Task<List<TeamSubscription>> GetTeamSubscriptionsAsync(
@@ -82,74 +66,115 @@ public class TariffService(DatabaseContext context) : ITariffService
         CurrencyRate currencyRate,
         CancellationToken cancellationToken)
     {
-        if (serviceId == ServiceId.MarkdownTranslator)
+        return serviceId switch
         {
-            return Task.FromResult(new List<TeamSubscription>());
-        }
-
-        var tariffIds = serviceId switch
-        {
-            ServiceId.LaraueBoards => context.LaraueBoardsTeamTariffs.Select(x => x.Id),
+            ServiceId.LaraueBoards => GetLaraueBoardsTeamSubscriptionsAsync(currencyRate, cancellationToken),
+            ServiceId.MarkdownTranslator => Task.FromResult(new List<TeamSubscription>()),
             _ => throw new BadRequestException(
                 nameof(GetServiceTariffsRequest.ServiceId),
                 string.Format(Errors.UnknownService, serviceId)),
         };
-
-        return GetSubscriptionsAsync(
-            tariffIds,
-            currencyRate,
-            (id, title, price, formattedPrice, billingPeriod) => new TeamSubscription
-            {
-                Id = id,
-                Title = title,
-                Price = price,
-                FormattedPrice = formattedPrice,
-                BillingDuration = billingPeriod == BillingPeriod.Forever ? null : 1,
-                BillingPeriod = billingPeriod,
-            },
-            cancellationToken);
     }
 
-    private async Task<List<TSubscription>> GetSubscriptionsAsync<TSubscription>(
-        IQueryable<Guid> tariffIds,
+    private async Task<List<PersonalSubscription>> GetLaraueBoardsPersonalSubscriptionsAsync(
         CurrencyRate currencyRate,
-        Func<Guid, string, decimal, string, BillingPeriod, TSubscription> createSubscription,
         CancellationToken cancellationToken)
-        where TSubscription : Subscription
     {
-        var tariffs = await context.Tariffs
-            .Where(x => x.IsActive)
-            .Join(tariffIds, t => t.Id, id => id, (t, _) => new { t.Id, t.Title, t.Price, t.BillingPeriod })
+        var rows = await context.LaraueBoardsPersonalTariffs
+            .Where(x => x.Tariff!.IsActive)
+            .Select(x => new
+            {
+                x.Tariff!.Id,
+                x.Tariff.Title,
+                x.Tariff.Price,
+                x.Tariff.BillingPeriod,
+                x.Tariff.IncludedTokensCount,
+                x.LimitIssuesPerMonth,
+                x.LimitFreeTeamOrganizationsCount,
+            })
             .ToListAsync(cancellationToken);
 
-        return tariffs
-            .Select(x => createSubscription(
-                x.Id,
-                x.Title,
-                ConvertPrice(x.Price, currencyRate),
-                FormatPrice(x.Price, currencyRate),
-                x.BillingPeriod))
-            .OrderBy(x => x.Price)
-            .ToList();
-    }
-
-    private async Task<List<TokenPack>> GetTokenPacksAsync(CurrencyRate currencyRate, CancellationToken cancellationToken)
-    {
-        var tokenPacks = await context.TokenPacks
-            .Where(x => x.IsActive)
-            .Select(x => new { x.Id, x.Title, x.Price, x.TokensCount, x.ExpirationDuration, x.ExpirationPeriod })
-            .ToListAsync(cancellationToken);
-
-        return tokenPacks
-            .Select(x => new TokenPack
+        return rows
+            .Select(x => (PersonalSubscription)new LaraueBoardsPersonalSubscription
             {
                 Id = x.Id,
                 Title = x.Title,
                 Price = ConvertPrice(x.Price, currencyRate),
+                CurrencyCode = currencyRate.Code,
                 FormattedPrice = FormatPrice(x.Price, currencyRate),
-                Amount = x.TokensCount,
-                BillingDuration = x.ExpirationDuration,
-                BillingPeriod = x.ExpirationPeriod,
+                BillingDuration = x.BillingPeriod == BillingPeriod.Forever ? null : 1,
+                BillingPeriod = x.BillingPeriod,
+                IncludedTokensCount = x.IncludedTokensCount,
+                LimitIssuesPerMonth = x.LimitIssuesPerMonth,
+                LimitFreeTeamOrganizationsCount = x.LimitFreeTeamOrganizationsCount,
+            })
+            .OrderBy(x => x.Price)
+            .ToList();
+    }
+
+    private async Task<List<PersonalSubscription>> GetMarkdownTranslatorPersonalSubscriptionsAsync(
+        CurrencyRate currencyRate,
+        CancellationToken cancellationToken)
+    {
+        var rows = await context.MarkdownTranslatorPersonalTariffs
+            .Where(x => x.Tariff!.IsActive)
+            .Select(x => new
+            {
+                x.Tariff!.Id,
+                x.Tariff.Title,
+                x.Tariff.Price,
+                x.Tariff.BillingPeriod,
+                x.Tariff.IncludedTokensCount,
+                x.IncludedDailyFreeTokensCount,
+            })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .Select(x => (PersonalSubscription)new MarkdownTranslatorPersonalSubscription
+            {
+                Id = x.Id,
+                Title = x.Title,
+                Price = ConvertPrice(x.Price, currencyRate),
+                CurrencyCode = currencyRate.Code,
+                FormattedPrice = FormatPrice(x.Price, currencyRate),
+                BillingDuration = x.BillingPeriod == BillingPeriod.Forever ? null : 1,
+                BillingPeriod = x.BillingPeriod,
+                IncludedTokensCount = x.IncludedTokensCount,
+                IncludedDailyFreeTokensCount = x.IncludedDailyFreeTokensCount,
+            })
+            .OrderBy(x => x.Price)
+            .ToList();
+    }
+
+    private async Task<List<TeamSubscription>> GetLaraueBoardsTeamSubscriptionsAsync(
+        CurrencyRate currencyRate,
+        CancellationToken cancellationToken)
+    {
+        var rows = await context.LaraueBoardsTeamTariffs
+            .Where(x => x.Tariff!.IsActive)
+            .Select(x => new
+            {
+                x.Tariff!.Id,
+                x.Tariff.Title,
+                x.Tariff.Price,
+                x.Tariff.BillingPeriod,
+                x.Tariff.IncludedTokensCount,
+                x.LimitIssuesPerMonth,
+            })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .Select(x => (TeamSubscription)new LaraueBoardsTeamSubscription
+            {
+                Id = x.Id,
+                Title = x.Title,
+                Price = ConvertPrice(x.Price, currencyRate),
+                CurrencyCode = currencyRate.Code,
+                FormattedPrice = FormatPrice(x.Price, currencyRate),
+                BillingDuration = x.BillingPeriod == BillingPeriod.Forever ? null : 1,
+                BillingPeriod = x.BillingPeriod,
+                IncludedTokensCount = x.IncludedTokensCount,
+                LimitIssuesPerMonth = x.LimitIssuesPerMonth,
             })
             .OrderBy(x => x.Price)
             .ToList();
@@ -181,8 +206,9 @@ public class TariffService(DatabaseContext context) : ITariffService
     {
         var amount = ConvertPrice(priceInUsdCents, currencyRate);
         var decimals = GetDecimalPlaces(currencyRate.RoundingStep);
+        var format = decimals > 0 ? "0." + new string('#', decimals) : "0";
 
-        return $"{amount.ToString("F" + decimals, CultureInfo.InvariantCulture)} {currencyRate.Code}";
+        return $"{amount.ToString(format, CultureInfo.InvariantCulture)}{currencyRate.Symbol}";
     }
 
     private static int GetDecimalPlaces(decimal step)
@@ -210,13 +236,13 @@ public record GetServiceTariffsResponse
 {
     public required IList<PersonalSubscription> PersonalSubscriptions { get; set; }
     public required IList<TeamSubscription> TeamSubscriptions { get; set; }
-    public required IList<TokenPack> TokenPacks { get; set; }
 }
 
-public abstract record Tariff
+public abstract record Subscription
 {
     public required string Title { get; set; }
     public decimal Price { get; set; }
+    public required string CurrencyCode { get; set; }
     public required string FormattedPrice { get; set; }
 
     /// <summary>
@@ -226,22 +252,36 @@ public abstract record Tariff
     public BillingPeriod BillingPeriod { get; set; }
 }
 
-public abstract record Subscription : Tariff
-{
-}
-
-public record PersonalSubscription : Subscription
-{
-    public required Guid Id { get; set; }
-}
-
-public record TeamSubscription : Subscription
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(LaraueBoardsPersonalSubscription), "LaraueBoardsPersonal")]
+[JsonDerivedType(typeof(MarkdownTranslatorPersonalSubscription), "MarkdownTranslatorPersonal")]
+public abstract record PersonalSubscription : Subscription
 {
     public required Guid Id { get; set; }
 }
 
-public record TokenPack : Tariff
+public sealed record LaraueBoardsPersonalSubscription : PersonalSubscription
+{
+    public required long IncludedTokensCount { get; set; }
+    public int? LimitIssuesPerMonth { get; set; }
+    public int? LimitFreeTeamOrganizationsCount { get; set; }
+}
+
+public sealed record MarkdownTranslatorPersonalSubscription : PersonalSubscription
+{
+    public required long IncludedTokensCount { get; set; }
+    public required long IncludedDailyFreeTokensCount { get; set; }
+}
+
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
+[JsonDerivedType(typeof(LaraueBoardsTeamSubscription), "LaraueBoardsTeam")]
+public abstract record TeamSubscription : Subscription
 {
     public required Guid Id { get; set; }
-    public long Amount { get; set; }
+}
+
+public sealed record LaraueBoardsTeamSubscription : TeamSubscription
+{
+    public required long IncludedTokensCount { get; set; }
+    public int? LimitIssuesPerMonth { get; set; }
 }
