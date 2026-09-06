@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Laraue.Apps.Billing.DataAccess;
+using Laraue.Apps.Billing.WebApiServices;
 using Laraue.Core.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
@@ -26,6 +27,7 @@ public static class WebApplicationBuilderExtensions
         public WebApplicationBuilder AddApplicationServices()
         {
             builder.Services.AddScoped<ExceptionHandleMiddleware>();
+            builder.Services.AddScoped<ITariffService, TariffService>();
 
             builder.Services
                 .AddControllers()

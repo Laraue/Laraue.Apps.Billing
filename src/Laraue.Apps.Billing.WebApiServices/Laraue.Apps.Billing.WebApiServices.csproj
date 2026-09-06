@@ -10,4 +10,19 @@
       <ProjectReference Include="..\Laraue.Apps.Billing.DataAccess\Laraue.Apps.Billing.DataAccess.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Compile Remove="Resources\Errors.Designer.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Update="Resources\Errors.resx">
+        <Generator>PublicResXFileCodeGenerator</Generator>
+        <LastGenOutput>Errors.Designer.cs</LastGenOutput>
+        <StronglyTypedFileName>Resources\Errors.Designer.cs</StronglyTypedFileName>
+        <StronglyTypedLanguage>CSharp</StronglyTypedLanguage>
+        <StronglyTypedNamespace>Laraue.Apps.Billing.WebApiServices.Resources</StronglyTypedNamespace>
+        <StronglyTypedClassName>Errors</StronglyTypedClassName>
+      </EmbeddedResource>
+    </ItemGroup>
+
 </Project>
