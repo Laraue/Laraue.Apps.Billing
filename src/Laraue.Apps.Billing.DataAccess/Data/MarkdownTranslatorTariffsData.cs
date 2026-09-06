@@ -6,13 +6,17 @@ public static class MarkdownTranslatorTariffsData
 {
     private const long IncludedDailyFreeTokensCount = 10_000;
 
+    private static readonly Guid FreeId = new("33c1fcec-e6ed-47eb-a64c-27e3deb41038");
+    private static readonly Guid PlusId = new("67307208-94fa-4da8-8ad4-d6902ba2a1a5");
+    private static readonly Guid ProId = new("7aa60cba-ee52-4150-922d-2ea9b6c7aeb5");
+
     private static readonly TariffSeed<MarkdownTranslatorPersonalTariff> Free =
         new(
             new Tariff
             {
-                BillingPeriod = BillingPeriod.Month,
-                Code = "free",
-                Id = TariffId.MarkdownTranslatorFree,
+                BillingPeriod = BillingPeriod.Forever,
+                Title = "Free",
+                Id = FreeId,
                 IncludedTokensCount = 0,
                 IsActive = true,
                 Price = 0,
@@ -20,7 +24,7 @@ public static class MarkdownTranslatorTariffsData
             },
             new MarkdownTranslatorPersonalTariff
             {
-                Id = TariffId.MarkdownTranslatorFree,
+                Id = FreeId,
                 IncludedDailyFreeTokensCount = IncludedDailyFreeTokensCount,
             });
 
@@ -29,8 +33,8 @@ public static class MarkdownTranslatorTariffsData
             new Tariff
             {
                 BillingPeriod = BillingPeriod.Month,
-                Code = "plus",
-                Id = TariffId.MarkdownTranslatorPlus,
+                Title = "Plus",
+                Id = PlusId,
                 IncludedTokensCount = 300_000,
                 IsActive = true,
                 Price = 4_00,
@@ -38,7 +42,7 @@ public static class MarkdownTranslatorTariffsData
             },
             new MarkdownTranslatorPersonalTariff
             {
-                Id = TariffId.MarkdownTranslatorPlus,
+                Id = PlusId,
                 IncludedDailyFreeTokensCount = IncludedDailyFreeTokensCount,
             });
 
@@ -47,8 +51,8 @@ public static class MarkdownTranslatorTariffsData
             new Tariff
             {
                 BillingPeriod = BillingPeriod.Month,
-                Code = "pro",
-                Id = TariffId.MarkdownTranslatorPro,
+                Title = "Pro",
+                Id = ProId,
                 IncludedTokensCount = 1_200_000,
                 IsActive = true,
                 Price = 10_00,
@@ -56,7 +60,7 @@ public static class MarkdownTranslatorTariffsData
             },
             new MarkdownTranslatorPersonalTariff
             {
-                Id = TariffId.MarkdownTranslatorPro,
+                Id = ProId,
                 IncludedDailyFreeTokensCount = IncludedDailyFreeTokensCount,
             });
 

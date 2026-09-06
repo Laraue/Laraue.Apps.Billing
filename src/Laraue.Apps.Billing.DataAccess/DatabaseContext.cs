@@ -46,14 +46,41 @@ public class DatabaseContext : DbContext
                     .Concat(LaraueBoardsTariffsData.TeamTariffs.Select(x => x.Tariff))
                     .Concat(MarkdownTranslatorTariffsData.PersonalTariffs.Select(x => x.Tariff)));
 
-        modelBuilder.Entity<LaraueBoardsPersonalTariff>()
-            .HasData(LaraueBoardsTariffsData.PersonalTariffs.Select(x => x.Entity));
+        modelBuilder.Entity<LaraueBoardsPersonalTariff>(builder =>
+        {
+            builder.HasData(
+                LaraueBoardsTariffsData.PersonalTariffs
+                    .Select(x => x.Entity));
 
-        modelBuilder.Entity<LaraueBoardsTeamTariff>()
-            .HasData(LaraueBoardsTariffsData.TeamTariffs.Select(x => x.Entity));
+            builder
+                .HasOne(x => x.Tariff)
+                .WithOne()
+                .HasForeignKey<LaraueBoardsPersonalTariff>(x => x.Id);
+        });
 
-        modelBuilder.Entity<MarkdownTranslatorPersonalTariff>()
-            .HasData(MarkdownTranslatorTariffsData.PersonalTariffs.Select(x => x.Entity));
+        modelBuilder.Entity<LaraueBoardsTeamTariff>(builder =>
+        {
+            builder.HasData(
+                LaraueBoardsTariffsData.TeamTariffs
+                    .Select(x => x.Entity));
+
+            builder
+                .HasOne(x => x.Tariff)
+                .WithOne()
+                .HasForeignKey<LaraueBoardsTeamTariff>(x => x.Id);
+        });
+
+        modelBuilder.Entity<MarkdownTranslatorPersonalTariff>(builder =>
+        {
+            builder.HasData(
+                MarkdownTranslatorTariffsData.PersonalTariffs
+                    .Select(x => x.Entity));
+            
+            builder
+                .HasOne(x => x.Tariff)
+                .WithOne()
+                .HasForeignKey<MarkdownTranslatorPersonalTariff>(x => x.Id);
+        });
 
         modelBuilder.Entity<TokenPack>()
             .HasData(TokenPacksData.Packs);

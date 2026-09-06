@@ -2,7 +2,8 @@
 
 public class LaraueBoardsPersonalTariff
 {
-    public required TariffId Id { get; set; }
+    public required Guid Id { get; set; }
+    public Tariff? Tariff { get; set; }
     public required int? LimitIssuesPerMonth { get; set; }
     public required int? LimitFreeTeamOrganizationsCount { get; set; }
 }

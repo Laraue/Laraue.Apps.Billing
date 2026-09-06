@@ -65,12 +65,13 @@ public class TariffService(DatabaseContext context) : ITariffService
         return GetSubscriptionsAsync(
             tariffIds,
             currencyRate,
-            (id, price, formattedPrice, billingPeriod) => new PersonalSubscription
+            (id, title, price, formattedPrice, billingPeriod) => new PersonalSubscription
             {
                 Id = id,
+                Title = title,
                 Price = price,
                 FormattedPrice = formattedPrice,
-                BillingDuration = 1,
+                BillingDuration = billingPeriod == BillingPeriod.Forever ? null : 1,
                 BillingPeriod = billingPeriod,
             },
             cancellationToken);
@@ -81,10 +82,14 @@ public class TariffService(DatabaseContext context) : ITariffService
         CurrencyRate currencyRate,
         CancellationToken cancellationToken)
     {
+        if (serviceId == ServiceId.MarkdownTranslator)
+        {
+            return Task.FromResult(new List<TeamSubscription>());
+        }
+
         var tariffIds = serviceId switch
         {
             ServiceId.LaraueBoards => context.LaraueBoardsTeamTariffs.Select(x => x.Id),
-            ServiceId.MarkdownTranslator => Enumerable.Empty<TariffId>().AsQueryable(),
             _ => throw new BadRequestException(
                 nameof(GetServiceTariffsRequest.ServiceId),
                 string.Format(Errors.UnknownService, serviceId)),
@@ -93,36 +98,38 @@ public class TariffService(DatabaseContext context) : ITariffService
         return GetSubscriptionsAsync(
             tariffIds,
             currencyRate,
-            (id, price, formattedPrice, billingPeriod) => new TeamSubscription
+            (id, title, price, formattedPrice, billingPeriod) => new TeamSubscription
             {
                 Id = id,
+                Title = title,
                 Price = price,
                 FormattedPrice = formattedPrice,
-                BillingDuration = 1,
+                BillingDuration = billingPeriod == BillingPeriod.Forever ? null : 1,
                 BillingPeriod = billingPeriod,
             },
             cancellationToken);
     }
 
     private async Task<List<TSubscription>> GetSubscriptionsAsync<TSubscription>(
-        IQueryable<TariffId> tariffIds,
+        IQueryable<Guid> tariffIds,
         CurrencyRate currencyRate,
-        Func<TariffId, decimal, string, BillingPeriod, TSubscription> createSubscription,
+        Func<Guid, string, decimal, string, BillingPeriod, TSubscription> createSubscription,
         CancellationToken cancellationToken)
         where TSubscription : Subscription
     {
         var tariffs = await context.Tariffs
             .Where(x => x.IsActive)
-            .Join(tariffIds, t => t.Id, id => id, (t, _) => new { t.Id, t.Price, t.BillingPeriod })
+            .Join(tariffIds, t => t.Id, id => id, (t, _) => new { t.Id, t.Title, t.Price, t.BillingPeriod })
             .ToListAsync(cancellationToken);
 
         return tariffs
             .Select(x => createSubscription(
                 x.Id,
+                x.Title,
                 ConvertPrice(x.Price, currencyRate),
                 FormatPrice(x.Price, currencyRate),
                 x.BillingPeriod))
-            .OrderByDescending(x => x.Price)
+            .OrderBy(x => x.Price)
             .ToList();
     }
 
@@ -130,19 +137,21 @@ public class TariffService(DatabaseContext context) : ITariffService
     {
         var tokenPacks = await context.TokenPacks
             .Where(x => x.IsActive)
-            .Select(x => new { x.Id, x.Price, x.TokensCount, x.ExpirationDuration })
+            .Select(x => new { x.Id, x.Title, x.Price, x.TokensCount, x.ExpirationDuration, x.ExpirationPeriod })
             .ToListAsync(cancellationToken);
 
         return tokenPacks
             .Select(x => new TokenPack
             {
                 Id = x.Id,
+                Title = x.Title,
                 Price = ConvertPrice(x.Price, currencyRate),
                 FormattedPrice = FormatPrice(x.Price, currencyRate),
                 Amount = x.TokensCount,
-                ExpirationDuration = x.ExpirationDuration,
+                BillingDuration = x.ExpirationDuration,
+                BillingPeriod = x.ExpirationPeriod,
             })
-            .OrderByDescending(x => x.Price)
+            .OrderBy(x => x.Price)
             .ToList();
     }
 
@@ -206,29 +215,33 @@ public record GetServiceTariffsResponse
 
 public abstract record Tariff
 {
+    public required string Title { get; set; }
     public decimal Price { get; set; }
     public required string FormattedPrice { get; set; }
+
+    /// <summary>
+    /// Null when <see cref="BillingPeriod"/> is <see cref="Entities.BillingPeriod.Forever"/>.
+    /// </summary>
+    public int? BillingDuration { get; set; }
+    public BillingPeriod BillingPeriod { get; set; }
 }
 
 public abstract record Subscription : Tariff
 {
-    public int BillingDuration { get; set; }
-    public BillingPeriod BillingPeriod { get; set; }
 }
 
 public record PersonalSubscription : Subscription
 {
-    public required TariffId Id { get; set; }
+    public required Guid Id { get; set; }
 }
 
 public record TeamSubscription : Subscription
 {
-    public required TariffId Id { get; set; }
+    public required Guid Id { get; set; }
 }
 
 public record TokenPack : Tariff
 {
     public required Guid Id { get; set; }
     public long Amount { get; set; }
-    public TimeSpan ExpirationDuration { get; set; }
 }

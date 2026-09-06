@@ -7,7 +7,7 @@ public class Subscription
     public ServiceId ServiceId { get; set; }
     public Service? Service { get; set; }
     
-    public TariffId TariffId { get; set; }
+    public Guid TariffId { get; set; }
     public Tariff? Tariff { get; set; }
     
     /// <summary>

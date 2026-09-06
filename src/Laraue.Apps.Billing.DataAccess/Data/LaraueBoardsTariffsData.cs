@@ -5,13 +5,19 @@ namespace Laraue.Apps.Billing.DataAccess.Data;
 
 public static class LaraueBoardsTariffsData
 {
+    private static readonly Guid PersonalFreeId = new("bd5f3457-601d-4ef1-92b2-47353f6b5a8f");
+    private static readonly Guid PersonalPlusId = new("e8e4b409-366d-4803-b116-76c1a4a6c8f1");
+    private static readonly Guid TeamFreeId = new("d42ebf59-008f-4a1e-8a00-c00f27331e86");
+    private static readonly Guid TeamId = new("89111f8d-292b-4f04-8766-b521e19e6964");
+    private static readonly Guid TeamBusinessId = new("bb78563f-631c-4f96-afdd-c35ab02b077e");
+
     private static readonly TariffSeed<LaraueBoardsPersonalTariff> PersonalFree =
         new(
             new Tariff
             {
-                BillingPeriod = BillingPeriod.Month,
-                Code = "personal_free",
-                Id = TariffId.LaraueBoardsPersonalFree,
+                BillingPeriod = BillingPeriod.Forever,
+                Title = "Free",
+                Id = PersonalFreeId,
                 IncludedTokensCount = 0,
                 IsActive = true,
                 Price = 0,
@@ -19,7 +25,7 @@ public static class LaraueBoardsTariffsData
             },
             new LaraueBoardsPersonalTariff
             {
-                Id = TariffId.LaraueBoardsPersonalFree,
+                Id = PersonalFreeId,
                 LimitFreeTeamOrganizationsCount = 1,
                 LimitIssuesPerMonth = 500,
             });
@@ -29,8 +35,8 @@ public static class LaraueBoardsTariffsData
             new Tariff
             {
                 BillingPeriod = BillingPeriod.Month,
-                Code = "personal_plus",
-                Id = TariffId.LaraueBoardsPersonalPlus,
+                Title = "Plus",
+                Id = PersonalPlusId,
                 IncludedTokensCount = 300_000,
                 IsActive = true,
                 Price = 4_00,
@@ -38,7 +44,7 @@ public static class LaraueBoardsTariffsData
             },
             new LaraueBoardsPersonalTariff
             {
-                Id = TariffId.LaraueBoardsPersonalPlus,
+                Id = PersonalPlusId,
                 LimitFreeTeamOrganizationsCount = null,
                 LimitIssuesPerMonth = 50_000,
             });
@@ -47,9 +53,9 @@ public static class LaraueBoardsTariffsData
         new(
             new Tariff
             {
-                BillingPeriod = BillingPeriod.Month,
-                Code = "team_free",
-                Id = TariffId.LaraueBoardsTeamFree,
+                BillingPeriod = BillingPeriod.Forever,
+                Title = "Free",
+                Id = TeamFreeId,
                 IncludedTokensCount = 0,
                 IsActive = true,
                 Price = 0,
@@ -57,7 +63,7 @@ public static class LaraueBoardsTariffsData
             },
             new LaraueBoardsTeamTariff
             {
-                Id = TariffId.LaraueBoardsTeamFree,
+                Id = TeamFreeId,
                 LimitIssuesPerMonth = 500,
             });
 
@@ -66,8 +72,8 @@ public static class LaraueBoardsTariffsData
             new Tariff
             {
                 BillingPeriod = BillingPeriod.Month,
-                Code = "team",
-                Id = TariffId.LaraueBoardsTeam,
+                Title = "Team",
+                Id = TeamId,
                 IncludedTokensCount = 750_000,
                 IsActive = true,
                 Price = 6_00,
@@ -75,7 +81,7 @@ public static class LaraueBoardsTariffsData
             },
             new LaraueBoardsTeamTariff
             {
-                Id = TariffId.LaraueBoardsTeam,
+                Id = TeamId,
                 LimitIssuesPerMonth = 50_000,
             });
 
@@ -84,8 +90,8 @@ public static class LaraueBoardsTariffsData
             new Tariff
             {
                 BillingPeriod = BillingPeriod.Month,
-                Code = "team_business",
-                Id = TariffId.LaraueBoardsTeamBusiness,
+                Title = "Business",
+                Id = TeamBusinessId,
                 IncludedTokensCount = 2_500_000,
                 IsActive = true,
                 Price = 14_00,
@@ -93,7 +99,7 @@ public static class LaraueBoardsTariffsData
             },
             new LaraueBoardsTeamTariff
             {
-                Id = TariffId.LaraueBoardsTeamBusiness,
+                Id = TeamBusinessId,
                 LimitIssuesPerMonth = 200_000,
             });
 

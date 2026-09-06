@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Laraue.Apps.Billing.DataAccess.Migrations
 {
     [DbContext(typeof(DatabaseContext))]
-    [Migration("20260906143808_AddCurrencyRateRoundingRule")]
-    partial class AddCurrencyRateRoundingRule
+    [Migration("20260906153413_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -114,8 +114,8 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
 
             modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.LaraueBoardsPersonalTariff", b =>
                 {
-                    b.Property<int>("Id")
-                        .HasColumnType("integer")
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<int?>("LimitFreeTeamOrganizationsCount")
@@ -134,21 +134,21 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                     b.HasData(
                         new
                         {
-                            Id = 0,
+                            Id = new Guid("bd5f3457-601d-4ef1-92b2-47353f6b5a8f"),
                             LimitFreeTeamOrganizationsCount = 1,
                             LimitIssuesPerMonth = 500
                         },
                         new
                         {
-                            Id = 1,
+                            Id = new Guid("e8e4b409-366d-4803-b116-76c1a4a6c8f1"),
                             LimitIssuesPerMonth = 50000
                         });
                 });
 
             modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.LaraueBoardsTeamTariff", b =>
                 {
-                    b.Property<int>("Id")
-                        .HasColumnType("integer")
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<int?>("LimitIssuesPerMonth")
@@ -163,25 +163,25 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                     b.HasData(
                         new
                         {
-                            Id = 2,
+                            Id = new Guid("d42ebf59-008f-4a1e-8a00-c00f27331e86"),
                             LimitIssuesPerMonth = 500
                         },
                         new
                         {
-                            Id = 3,
+                            Id = new Guid("89111f8d-292b-4f04-8766-b521e19e6964"),
                             LimitIssuesPerMonth = 50000
                         },
                         new
                         {
-                            Id = 4,
+                            Id = new Guid("bb78563f-631c-4f96-afdd-c35ab02b077e"),
                             LimitIssuesPerMonth = 200000
                         });
                 });
 
             modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.MarkdownTranslatorPersonalTariff", b =>
                 {
-                    b.Property<int>("Id")
-                        .HasColumnType("integer")
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<long>("IncludedDailyFreeTokensCount")
@@ -196,17 +196,17 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                     b.HasData(
                         new
                         {
-                            Id = 5,
+                            Id = new Guid("33c1fcec-e6ed-47eb-a64c-27e3deb41038"),
                             IncludedDailyFreeTokensCount = 10000L
                         },
                         new
                         {
-                            Id = 6,
+                            Id = new Guid("67307208-94fa-4da8-8ad4-d6902ba2a1a5"),
                             IncludedDailyFreeTokensCount = 10000L
                         },
                         new
                         {
-                            Id = 7,
+                            Id = new Guid("7aa60cba-ee52-4150-922d-2ea9b6c7aeb5"),
                             IncludedDailyFreeTokensCount = 10000L
                         });
                 });
@@ -316,8 +316,8 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("status");
 
-                    b.Property<int>("TariffId")
-                        .HasColumnType("integer")
+                    b.Property<Guid>("TariffId")
+                        .HasColumnType("uuid")
                         .HasColumnName("tariff_id");
 
                     b.HasKey("Id")
@@ -334,19 +334,14 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
 
             modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.Tariff", b =>
                 {
-                    b.Property<int>("Id")
-                        .HasColumnType("integer")
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<int>("BillingPeriod")
                         .HasColumnType("integer")
                         .HasColumnName("billing_period");
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)")
-                        .HasColumnName("code");
 
                     b.Property<long>("IncludedTokensCount")
                         .HasColumnType("bigint")
@@ -360,6 +355,12 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("price");
 
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("title");
+
                     b.Property<int>("Type")
                         .HasColumnType("integer")
                         .HasColumnName("type");
@@ -372,82 +373,82 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                     b.HasData(
                         new
                         {
-                            Id = 0,
-                            BillingPeriod = 0,
-                            Code = "personal_free",
+                            Id = new Guid("bd5f3457-601d-4ef1-92b2-47353f6b5a8f"),
+                            BillingPeriod = 1,
                             IncludedTokensCount = 0L,
                             IsActive = true,
                             Price = 0,
+                            Title = "Free",
                             Type = 0
                         },
                         new
                         {
-                            Id = 1,
+                            Id = new Guid("e8e4b409-366d-4803-b116-76c1a4a6c8f1"),
                             BillingPeriod = 0,
-                            Code = "personal_plus",
                             IncludedTokensCount = 300000L,
                             IsActive = true,
                             Price = 400,
+                            Title = "Plus",
                             Type = 0
                         },
                         new
                         {
-                            Id = 2,
-                            BillingPeriod = 0,
-                            Code = "team_free",
+                            Id = new Guid("d42ebf59-008f-4a1e-8a00-c00f27331e86"),
+                            BillingPeriod = 1,
                             IncludedTokensCount = 0L,
                             IsActive = true,
                             Price = 0,
+                            Title = "Free",
                             Type = 1
                         },
                         new
                         {
-                            Id = 3,
+                            Id = new Guid("89111f8d-292b-4f04-8766-b521e19e6964"),
                             BillingPeriod = 0,
-                            Code = "team",
                             IncludedTokensCount = 750000L,
                             IsActive = true,
                             Price = 600,
+                            Title = "Team",
                             Type = 1
                         },
                         new
                         {
-                            Id = 4,
+                            Id = new Guid("bb78563f-631c-4f96-afdd-c35ab02b077e"),
                             BillingPeriod = 0,
-                            Code = "team_business",
                             IncludedTokensCount = 2500000L,
                             IsActive = true,
                             Price = 1400,
+                            Title = "Business",
                             Type = 1
                         },
                         new
                         {
-                            Id = 5,
-                            BillingPeriod = 0,
-                            Code = "free",
+                            Id = new Guid("33c1fcec-e6ed-47eb-a64c-27e3deb41038"),
+                            BillingPeriod = 1,
                             IncludedTokensCount = 0L,
                             IsActive = true,
                             Price = 0,
+                            Title = "Free",
                             Type = 0
                         },
                         new
                         {
-                            Id = 6,
+                            Id = new Guid("67307208-94fa-4da8-8ad4-d6902ba2a1a5"),
                             BillingPeriod = 0,
-                            Code = "plus",
                             IncludedTokensCount = 300000L,
                             IsActive = true,
                             Price = 400,
+                            Title = "Plus",
                             Type = 0
                         },
                         new
                         {
-                            Id = 7,
+                            Id = new Guid("7aa60cba-ee52-4150-922d-2ea9b6c7aeb5"),
                             BillingPeriod = 0,
-                            Code = "pro",
                             IncludedTokensCount = 1200000L,
                             IsActive = true,
                             Price = 1000,
+                            Title = "Pro",
                             Type = 0
                         });
                 });
@@ -465,9 +466,13 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("character varying(16)")
                         .HasColumnName("code");
 
-                    b.Property<TimeSpan>("ExpirationDuration")
-                        .HasColumnType("interval")
+                    b.Property<int>("ExpirationDuration")
+                        .HasColumnType("integer")
                         .HasColumnName("expiration_duration");
+
+                    b.Property<int>("ExpirationPeriod")
+                        .HasColumnType("integer")
+                        .HasColumnName("expiration_period");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
@@ -476,6 +481,12 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                     b.Property<int>("Price")
                         .HasColumnType("integer")
                         .HasColumnName("price");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("title");
 
                     b.Property<long>("TokensCount")
                         .HasColumnType("bigint")
@@ -491,27 +502,33 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         {
                             Id = new Guid("76abd692-c450-4cd6-80e4-b9c012d91610"),
                             Code = "small",
-                            ExpirationDuration = new TimeSpan(182, 12, 0, 0, 0),
+                            ExpirationDuration = 6,
+                            ExpirationPeriod = 0,
                             IsActive = true,
                             Price = 300,
+                            Title = "Small",
                             TokensCount = 100000L
                         },
                         new
                         {
                             Id = new Guid("bb76c6c6-41b9-4546-972a-a9730456fdf0"),
                             Code = "medium",
-                            ExpirationDuration = new TimeSpan(182, 12, 0, 0, 0),
+                            ExpirationDuration = 6,
+                            ExpirationPeriod = 0,
                             IsActive = true,
                             Price = 1200,
+                            Title = "Medium",
                             TokensCount = 600000L
                         },
                         new
                         {
                             Id = new Guid("2a840fe4-175a-4e69-834e-5f5f6c5e2150"),
                             Code = "large",
-                            ExpirationDuration = new TimeSpan(182, 12, 0, 0, 0),
+                            ExpirationDuration = 6,
+                            ExpirationPeriod = 0,
                             IsActive = true,
                             Price = 4000,
+                            Title = "Large",
                             TokensCount = 3000000L
                         });
                 });
@@ -627,6 +644,42 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasDatabaseName("ix_token_transaction_subscription_token_packs_subscription_id");
 
                     b.ToTable("token_transaction_subscription_token_packs", (string)null);
+                });
+
+            modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.LaraueBoardsPersonalTariff", b =>
+                {
+                    b.HasOne("Laraue.Apps.Billing.DataAccess.Entities.Tariff", "Tariff")
+                        .WithOne()
+                        .HasForeignKey("Laraue.Apps.Billing.DataAccess.Entities.LaraueBoardsPersonalTariff", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_laraue_boards_personal_tariffs_tariffs_id");
+
+                    b.Navigation("Tariff");
+                });
+
+            modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.LaraueBoardsTeamTariff", b =>
+                {
+                    b.HasOne("Laraue.Apps.Billing.DataAccess.Entities.Tariff", "Tariff")
+                        .WithOne()
+                        .HasForeignKey("Laraue.Apps.Billing.DataAccess.Entities.LaraueBoardsTeamTariff", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_laraue_boards_team_tariffs_tariffs_id");
+
+                    b.Navigation("Tariff");
+                });
+
+            modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.MarkdownTranslatorPersonalTariff", b =>
+                {
+                    b.HasOne("Laraue.Apps.Billing.DataAccess.Entities.Tariff", "Tariff")
+                        .WithOne()
+                        .HasForeignKey("Laraue.Apps.Billing.DataAccess.Entities.MarkdownTranslatorPersonalTariff", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_markdown_translator_personal_tariffs_tariffs_id");
+
+                    b.Navigation("Tariff");
                 });
 
             modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.PurchasedTokenPack", b =>

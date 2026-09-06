@@ -2,6 +2,7 @@
 
 public class MarkdownTranslatorPersonalTariff
 {
-    public required TariffId Id { get; set; }
+    public required Guid Id { get; set; }
+    public Tariff? Tariff { get; set; }
     public required long IncludedDailyFreeTokensCount { get; set; }
 }
