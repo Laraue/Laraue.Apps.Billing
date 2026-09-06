@@ -6,7 +6,7 @@ public class Service
 {
     public ServiceId Id { get; set; }
     
-    [MaxLength(16)]
+    [MaxLength(32)]
     public required string Code { get; set; }
     
     [MaxLength(32)]

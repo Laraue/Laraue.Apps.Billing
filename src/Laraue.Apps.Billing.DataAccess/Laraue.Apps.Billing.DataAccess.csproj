@@ -8,6 +8,7 @@
 
     <ItemGroup>
       <PackageReference Include="Laraue.Core.DataAccess.EFCore" Version="10.8.0" />
+      <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="$(NpgsqlEfCoreVersion)" />
     </ItemGroup>
 
     <ItemGroup>
