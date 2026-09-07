@@ -17,6 +17,7 @@
   
   <PropertyGroup>
     <LaraueCoreDataAccessVersion>10.8.0</LaraueCoreDataAccessVersion>
+    <LaraueCoreTestingVersion>10.1.0</LaraueCoreTestingVersion>
     <EfCoreVersion>10.0.0</EfCoreVersion>
     <NpgsqlEfCoreVersion>10.0.0</NpgsqlEfCoreVersion>
     <EfCoreNamingConventionsVersion>10.0.1</EfCoreNamingConventionsVersion>
