@@ -57,7 +57,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Web API Host
+          - name: Billing Web API Host
             artifact: webapi-host
             archive: webapi-host.tar.gz
             remote_dir: /home/laraue/billing-webapi-host
