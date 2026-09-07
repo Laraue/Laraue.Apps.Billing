@@ -23,9 +23,12 @@ itself), built with `GrpcServices="Both"` so it ships both the client stub (for 
 `Laraue.Apps.Boards`) and the server base class from one package. Uses
 [`Laraue.Grpc`](https://github.com/Laraue/Laraue.Grpc) (`Laraue.Grpc.Server`/`.Client`/
 `.OpenTelemetry`) for interceptor-based tracing/metrics on both sides - see that repo's readme for
-how it works. **Not yet implemented by any host** - no `InternalApiHost` project or gRPC endpoint
-exists yet, this is in progress. `ITokenService` (token reserve/commit/cancel) is still a plain C#
-interface sketch, not a proto contract, and also not implemented anywhere.
+how it works. Implemented by `Laraue.Apps.Billing.InternalApiHost`/`.InternalApiServices` (see
+"Project layout" below). `ITokenService` (token reserve/commit/cancel) is still a plain C# interface
+sketch, not a proto contract, and not implemented anywhere yet.
+
+`Internal.Contracts` is published to NuGet.org as `Laraue.Apps.Billing.Internal.Contracts` so other
+apps (`Laraue.Apps.Boards`) can reference it - see "NuGet publishing" below.
 
 ## Domain model
 
@@ -165,6 +168,28 @@ infrastructure and conventions:
   database - it's easy to accidentally drop the dev DB (`billing`) by mistake.
 - Before any destructive DB operation, confirm which database (dev `billing` vs. test
   `billing_tests`) the command will actually target, and ask the user first if there's any ambiguity.
+
+## NuGet publishing
+
+`.github/workflows/nuget-publish.yml` packs and pushes every packable project (`IsPackable=true` -
+currently only `Laraue.Apps.Billing.Internal.Contracts`) to NuGet.org via trusted publishing (OIDC,
+no stored API key - see `Laraue.Grpc`'s readme for how that mechanism works), separately from
+`dotnet.yml`'s build/test/deploy pipeline. It runs on **every branch push**, not just `main`:
+
+- On `main`, it publishes the base `<Version>` from `Directory.Build.props` as-is.
+- On any other branch, it publishes `<Version>-alpha.<run number>` (e.g. `0.0.1-alpha.42`) instead -
+  a SemVer2 prerelease, so `dotnet add package`/restore never picks it up unless a consumer
+  explicitly asks for a prerelease or pins that exact version. This is the intended way to work on a
+  new/changed contract on a branch and let another service (e.g. `Laraue.Apps.Boards`) start
+  integrating against it immediately, before the branch merges.
+
+Needs a `NUGET_USER` repo secret (the nuget.org profile name, not email) and a trusted publishing
+policy configured on nuget.org for this repo/workflow file - see `Laraue.Grpc`'s readme for the
+exact nuget.org setup steps, same mechanism.
+
+Adding a new packable contract project later needs no workflow changes - just add
+`<IsPackable>true</IsPackable>` to that project (see `Internal.Contracts`'s `.csproj`), the
+solution-wide `dotnet pack` in this workflow picks it up automatically.
 
 ## Build-lock protocol
 

@@ -6,6 +6,7 @@
     <PackageProjectUrl>https://github.com/win7user10/Laraue.Apps.Billing</PackageProjectUrl>
     <!-- Designate all projects as non-package projects by default -->
     <IsPackable>false</IsPackable>
+    <Version>0.0.1</Version>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

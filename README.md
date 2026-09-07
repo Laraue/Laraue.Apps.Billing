@@ -17,6 +17,11 @@ generated client/server stubs, served by `InternalApiHost`/`InternalApiServices`
 is still a plain C# sketch, not yet a proto contract or implemented anywhere - see
 [AGENTS.md](AGENTS.md).
 
+Published to NuGet.org as `Laraue.Apps.Billing.Internal.Contracts` on every push, from any branch
+(see `.github/workflows/nuget-publish.yml`) - `main` publishes the real version, any other branch
+publishes a `-alpha.<run number>` prerelease so another service can integrate against an
+in-progress contract change before it merges.
+
 ### Laraue.Apps.Billing.Services
 Business logic shared across hosts (not tied to any one of them), e.g. `TariffService` (currency
 conversion, rounding, and formatting for a service's tariffs) and `SubscriptionService` (active
