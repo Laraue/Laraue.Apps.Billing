@@ -8,7 +8,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Laraue.Apps.Billing.WebApiS
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "hosts", "hosts", "{5563ACB5-3B77-4AEE-8B67-209330935856}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Laraue.Apps.Billing.WebApi", "src\Laraue.Apps.Billing.WebApi\Laraue.Apps.Billing.WebApi.csproj", "{D7A8407C-338F-4144-96B9-CB5DC4282B35}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Laraue.Apps.Billing.WebApiHost", "src\Laraue.Apps.Billing.WebApiHost\Laraue.Apps.Billing.WebApiHost.csproj", "{D7A8407C-338F-4144-96B9-CB5DC4282B35}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{6A5D7B3A-8F1A-4A5F-9F0C-1B7B7D9A6B21}"
 EndProject

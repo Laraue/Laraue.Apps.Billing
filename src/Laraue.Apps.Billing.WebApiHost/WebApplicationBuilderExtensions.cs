@@ -4,7 +4,7 @@ using Laraue.Apps.Billing.WebApiServices;
 using Laraue.Core.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
-namespace Laraue.Apps.Billing.WebApi;
+namespace Laraue.Apps.Billing.WebApiHost;
 
 public static class WebApplicationBuilderExtensions
 {

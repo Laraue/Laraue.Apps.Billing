@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Metrics;
 using Scalar.AspNetCore;
 
-namespace Laraue.Apps.Billing.WebApi;
+namespace Laraue.Apps.Billing.WebApiHost;
 
 public sealed class Program
 {

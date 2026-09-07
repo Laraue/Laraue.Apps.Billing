@@ -1,4 +1,4 @@
-using Laraue.Apps.Billing.WebApi;
+using Laraue.Apps.Billing.WebApiHost;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;

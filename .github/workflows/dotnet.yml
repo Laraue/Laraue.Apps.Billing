@@ -39,7 +39,7 @@ jobs:
 
     - name: Pack Web API Host
       if: github.ref == 'refs/heads/main'
-      run: tar -czf webapi-host.tar.gz -C src/Laraue.Apps.Billing.WebApi/bin/Release/net10.0 .
+      run: tar -czf webapi-host.tar.gz -C src/Laraue.Apps.Billing.WebApiHost/bin/Release/net10.0 .
 
     - name: Upload Web API Host artifact
       if: github.ref == 'refs/heads/main'

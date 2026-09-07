@@ -18,17 +18,17 @@ Request/response/interface shapes for the service-to-service contract other apps
 Business logic for the public web API, e.g. `TariffService` (currency conversion, rounding, and
 formatting for a service's tariffs).
 
-### Laraue.Apps.Billing.WebApi
+### Laraue.Apps.Billing.WebApiHost
 The ASP.NET host: `Program.cs`, DI wiring, controllers.
 
 ## Local run
 
 1. Have Postgres running locally and reachable with the credentials in
-   `src/Laraue.Apps.Billing.WebApi/appsettings.json`'s `ConnectionStrings:Postgre` (defaults to
+   `src/Laraue.Apps.Billing.WebApiHost/appsettings.json`'s `ConnectionStrings:Postgre` (defaults to
    `User ID=postgres;Password=postgres;Host=localhost;Port=5432`, database `billing`).
 2. Run the API:
    ```
-   dotnet run --project src/Laraue.Apps.Billing.WebApi
+   dotnet run --project src/Laraue.Apps.Billing.WebApiHost
    ```
    Migrations apply automatically on startup - no separate `dotnet ef database update` step.
 3. The API listens on `http://localhost:5262` by default (see `Properties/launchSettings.json`).

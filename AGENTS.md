@@ -12,7 +12,7 @@ token accounting themselves - they ask this service.
 
 Exposed via one surface today:
 
-- A public web API (`Laraue.Apps.Billing.WebApi`) that returns tariffs for a service in a given
+- A public web API (`Laraue.Apps.Billing.WebApiHost`) that returns tariffs for a service in a given
   currency, for frontend pricing pages. See `TariffsController`/`TariffService`.
 
 `Laraue.Apps.Billing.Internal.Contracts` additionally defines the *intended* service-to-service
@@ -77,7 +77,7 @@ Solution: `Laraue.Apps.Billing.sln`
   No implementation, no DB/ASP.NET dependencies - kept minimal so it could be shared as a package.
 - `src/Laraue.Apps.Billing.WebApiServices` - business logic for the public web API (`TariffService`),
   plus `Resources/Errors.resx` for user-facing error text.
-- `src/Laraue.Apps.Billing.WebApi` - ASP.NET host: `Program.cs`, `WebApplicationBuilderExtensions`
+- `src/Laraue.Apps.Billing.WebApiHost` - ASP.NET host: `Program.cs`, `WebApplicationBuilderExtensions`
   (DI wiring split into `AddDatabaseServices`/`AddApplicationServices`), controllers.
 - `tests/Laraue.Apps.Billing.IntegrationTests` - the only test project, structured the same way as
   `Laraue.Apps.Boards`'s integration tests (see "Testing" below).
@@ -134,7 +134,7 @@ infrastructure and conventions:
   `Laraue.Apps.Boards.IntegrationTests.Infrastructure.DbExtensions.CleanDatabase`) once tests start
   writing rows (subscriptions, token transactions, etc.) that need isolating between tests.
   Tests run against their own database, not the dev one - see `tests/.../appsettings.json`'s
-  `billing_tests` connection string vs. `src/Laraue.Apps.Billing.WebApi/appsettings.json`'s `billing`.
+  `billing_tests` connection string vs. `src/Laraue.Apps.Billing.WebApiHost/appsettings.json`'s `billing`.
 - **Naming convention**: `{Handler}_Should{ExpectedBehavior}_When{Condition}`, matching Boards.
   Prefer a separate `[Fact]`/`[Theory]` per case over one test covering several scenarios.
 
@@ -151,7 +151,7 @@ infrastructure and conventions:
 
 ## Build-lock protocol
 
-`dotnet build` can fail with `MSB3026`/`MSB3027` file-lock errors if `Laraue.Apps.Billing.WebApi` (or
+`dotnet build` can fail with `MSB3026`/`MSB3027` file-lock errors if `Laraue.Apps.Billing.WebApiHost` (or
 another host process) is already running locally and holding the output DLLs open. Don't kill the
 process yourself - ask the user to stop it, then retry the build once they confirm.
 

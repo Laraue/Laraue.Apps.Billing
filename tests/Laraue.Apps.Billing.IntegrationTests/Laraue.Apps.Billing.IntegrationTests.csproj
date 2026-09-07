@@ -23,7 +23,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\src\Laraue.Apps.Billing.WebApi\Laraue.Apps.Billing.WebApi.csproj" />
+      <ProjectReference Include="..\..\src\Laraue.Apps.Billing.WebApiHost\Laraue.Apps.Billing.WebApiHost.csproj" />
     </ItemGroup>
 
     <ItemGroup>

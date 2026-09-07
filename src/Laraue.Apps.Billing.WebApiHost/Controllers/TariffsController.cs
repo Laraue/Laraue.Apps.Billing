@@ -2,7 +2,7 @@ using Laraue.Apps.Billing.WebApiServices;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Laraue.Apps.Billing.WebApi.Controllers;
+namespace Laraue.Apps.Billing.WebApiHost.Controllers;
 
 [AllowAnonymous]
 [ApiController]
