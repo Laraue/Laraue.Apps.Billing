@@ -1,10 +1,6 @@
-using System.Globalization;
 using System.Text.Json.Serialization;
-using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.DataAccess.Entities;
-using Laraue.Apps.Billing.WebApiServices.Resources;
-using Laraue.Core.Exceptions.Web;
-using Microsoft.EntityFrameworkCore;
+using Laraue.Apps.Billing.Services;
 
 namespace Laraue.Apps.Billing.WebApiServices;
 
@@ -18,212 +14,70 @@ public interface ITariffService
         CancellationToken cancellationToken);
 }
 
-public class TariffService(DatabaseContext context) : ITariffService
+public class TariffService(ICoreTariffService coreTariffService) : ITariffService
 {
     public async Task<GetServiceTariffsResponse> GetServiceTariffs(
         GetServiceTariffsRequest request,
         CancellationToken cancellationToken)
     {
-        var currencyCode = request.CurrencyCode.ToUpper();
+        var currencyRate = await coreTariffService.GetCurrencyRateAsync(request.CurrencyCode, cancellationToken);
 
-        var currencyRate = await context.CurrencyRates
-            .SingleOrDefaultAsync(x => x.Code == currencyCode, cancellationToken);
-
-        if (currencyRate is null)
-        {
-            throw new BadRequestException(
-                nameof(request.CurrencyCode),
-                string.Format(Errors.CurrencyRateNotFound, currencyCode));
-        }
-
-        var personalSubscriptions = await GetPersonalSubscriptionsAsync(request.ServiceId, currencyRate, cancellationToken);
-        var teamSubscriptions = await GetTeamSubscriptionsAsync(request.ServiceId, currencyRate, cancellationToken);
+        var personalTariffs = await coreTariffService.GetPersonalTariffsAsync(request.ServiceId, currencyRate, cancellationToken);
+        var teamTariffs = await coreTariffService.GetTeamTariffsAsync(request.ServiceId, currencyRate, cancellationToken);
 
         return new GetServiceTariffsResponse
         {
-            PersonalSubscriptions = personalSubscriptions,
-            TeamSubscriptions = teamSubscriptions,
+            PersonalSubscriptions = personalTariffs.Select(ToPersonalSubscription).ToList(),
+            TeamSubscriptions = teamTariffs.Select(ToTeamSubscription).ToList(),
         };
     }
 
-    private Task<List<PersonalSubscription>> GetPersonalSubscriptionsAsync(
-        ServiceId serviceId,
-        CurrencyRate currencyRate,
-        CancellationToken cancellationToken)
+    private static PersonalSubscription ToPersonalSubscription(CoreTariff tariff) => tariff switch
     {
-        return serviceId switch
+        CoreLaraueBoardsPersonalTariff t => new LaraueBoardsPersonalSubscription
         {
-            ServiceId.LaraueBoards => GetLaraueBoardsPersonalSubscriptionsAsync(currencyRate, cancellationToken),
-            ServiceId.MarkdownTranslator => GetMarkdownTranslatorPersonalSubscriptionsAsync(currencyRate, cancellationToken),
-            _ => throw new BadRequestException(
-                nameof(GetServiceTariffsRequest.ServiceId),
-                string.Format(Errors.UnknownService, serviceId)),
-        };
-    }
-
-    private Task<List<TeamSubscription>> GetTeamSubscriptionsAsync(
-        ServiceId serviceId,
-        CurrencyRate currencyRate,
-        CancellationToken cancellationToken)
-    {
-        return serviceId switch
+            Id = t.Id,
+            Title = t.Title,
+            Price = t.Price,
+            CurrencyCode = t.CurrencyCode,
+            FormattedPrice = t.FormattedPrice,
+            BillingDuration = t.BillingDuration,
+            BillingPeriod = t.BillingPeriod,
+            IncludedTokensCount = t.IncludedTokensCount,
+            LimitIssuesPerMonth = t.LimitIssuesPerMonth,
+            LimitFreeTeamOrganizationsCount = t.LimitFreeTeamOrganizationsCount,
+        },
+        CoreMarkdownTranslatorPersonalTariff t => new MarkdownTranslatorPersonalSubscription
         {
-            ServiceId.LaraueBoards => GetLaraueBoardsTeamSubscriptionsAsync(currencyRate, cancellationToken),
-            ServiceId.MarkdownTranslator => Task.FromResult(new List<TeamSubscription>()),
-            _ => throw new BadRequestException(
-                nameof(GetServiceTariffsRequest.ServiceId),
-                string.Format(Errors.UnknownService, serviceId)),
-        };
-    }
+            Id = t.Id,
+            Title = t.Title,
+            Price = t.Price,
+            CurrencyCode = t.CurrencyCode,
+            FormattedPrice = t.FormattedPrice,
+            BillingDuration = t.BillingDuration,
+            BillingPeriod = t.BillingPeriod,
+            IncludedTokensCount = t.IncludedTokensCount,
+            IncludedDailyFreeTokensCount = t.IncludedDailyFreeTokensCount,
+        },
+        _ => throw new InvalidOperationException($"Unmapped personal tariff type '{tariff.GetType()}'."),
+    };
 
-    private async Task<List<PersonalSubscription>> GetLaraueBoardsPersonalSubscriptionsAsync(
-        CurrencyRate currencyRate,
-        CancellationToken cancellationToken)
+    private static TeamSubscription ToTeamSubscription(CoreTariff tariff) => tariff switch
     {
-        var rows = await context.LaraueBoardsPersonalTariffs
-            .Where(x => x.Tariff!.IsActive)
-            .Select(x => new
-            {
-                x.Tariff!.Id,
-                x.Tariff.Title,
-                x.Tariff.Price,
-                x.Tariff.BillingPeriod,
-                x.Tariff.IncludedTokensCount,
-                x.LimitIssuesPerMonth,
-                x.LimitFreeTeamOrganizationsCount,
-            })
-            .ToListAsync(cancellationToken);
-
-        return rows
-            .Select(x => (PersonalSubscription)new LaraueBoardsPersonalSubscription
-            {
-                Id = x.Id,
-                Title = x.Title,
-                Price = ConvertPrice(x.Price, currencyRate),
-                CurrencyCode = currencyRate.Code,
-                FormattedPrice = FormatPrice(x.Price, currencyRate),
-                BillingDuration = x.BillingPeriod == BillingPeriod.Forever ? null : 1,
-                BillingPeriod = x.BillingPeriod,
-                IncludedTokensCount = x.IncludedTokensCount,
-                LimitIssuesPerMonth = x.LimitIssuesPerMonth,
-                LimitFreeTeamOrganizationsCount = x.LimitFreeTeamOrganizationsCount,
-            })
-            .OrderBy(x => x.Price)
-            .ToList();
-    }
-
-    private async Task<List<PersonalSubscription>> GetMarkdownTranslatorPersonalSubscriptionsAsync(
-        CurrencyRate currencyRate,
-        CancellationToken cancellationToken)
-    {
-        var rows = await context.MarkdownTranslatorPersonalTariffs
-            .Where(x => x.Tariff!.IsActive)
-            .Select(x => new
-            {
-                x.Tariff!.Id,
-                x.Tariff.Title,
-                x.Tariff.Price,
-                x.Tariff.BillingPeriod,
-                x.Tariff.IncludedTokensCount,
-                x.IncludedDailyFreeTokensCount,
-            })
-            .ToListAsync(cancellationToken);
-
-        return rows
-            .Select(x => (PersonalSubscription)new MarkdownTranslatorPersonalSubscription
-            {
-                Id = x.Id,
-                Title = x.Title,
-                Price = ConvertPrice(x.Price, currencyRate),
-                CurrencyCode = currencyRate.Code,
-                FormattedPrice = FormatPrice(x.Price, currencyRate),
-                BillingDuration = x.BillingPeriod == BillingPeriod.Forever ? null : 1,
-                BillingPeriod = x.BillingPeriod,
-                IncludedTokensCount = x.IncludedTokensCount,
-                IncludedDailyFreeTokensCount = x.IncludedDailyFreeTokensCount,
-            })
-            .OrderBy(x => x.Price)
-            .ToList();
-    }
-
-    private async Task<List<TeamSubscription>> GetLaraueBoardsTeamSubscriptionsAsync(
-        CurrencyRate currencyRate,
-        CancellationToken cancellationToken)
-    {
-        var rows = await context.LaraueBoardsTeamTariffs
-            .Where(x => x.Tariff!.IsActive)
-            .Select(x => new
-            {
-                x.Tariff!.Id,
-                x.Tariff.Title,
-                x.Tariff.Price,
-                x.Tariff.BillingPeriod,
-                x.Tariff.IncludedTokensCount,
-                x.LimitIssuesPerMonth,
-            })
-            .ToListAsync(cancellationToken);
-
-        return rows
-            .Select(x => (TeamSubscription)new LaraueBoardsTeamSubscription
-            {
-                Id = x.Id,
-                Title = x.Title,
-                Price = ConvertPrice(x.Price, currencyRate),
-                CurrencyCode = currencyRate.Code,
-                FormattedPrice = FormatPrice(x.Price, currencyRate),
-                BillingDuration = x.BillingPeriod == BillingPeriod.Forever ? null : 1,
-                BillingPeriod = x.BillingPeriod,
-                IncludedTokensCount = x.IncludedTokensCount,
-                LimitIssuesPerMonth = x.LimitIssuesPerMonth,
-            })
-            .OrderBy(x => x.Price)
-            .ToList();
-    }
-
-    private static decimal ConvertPrice(int priceInUsdCents, CurrencyRate currencyRate)
-    {
-        var amount = priceInUsdCents / 100m / currencyRate.RateToUsd;
-
-        return RoundPrice(amount, currencyRate);
-    }
-
-    private static decimal RoundPrice(decimal amount, CurrencyRate currencyRate)
-    {
-        var step = currencyRate.RoundingStep;
-        var steps = amount / step;
-
-        var roundedSteps = currencyRate.RoundingMode switch
+        CoreLaraueBoardsTeamTariff t => new LaraueBoardsTeamSubscription
         {
-            RoundingMode.Up => Math.Ceiling(steps),
-            RoundingMode.Down => Math.Floor(steps),
-            _ => Math.Round(steps, MidpointRounding.AwayFromZero),
-        };
-
-        return roundedSteps * step;
-    }
-
-    private static string FormatPrice(int priceInUsdCents, CurrencyRate currencyRate)
-    {
-        var amount = ConvertPrice(priceInUsdCents, currencyRate);
-        var decimals = GetDecimalPlaces(currencyRate.RoundingStep);
-        var format = decimals > 0 ? "0." + new string('#', decimals) : "0";
-
-        return $"{amount.ToString(format, CultureInfo.InvariantCulture)}{currencyRate.Symbol}";
-    }
-
-    private static int GetDecimalPlaces(decimal step)
-    {
-        step = Math.Abs(step);
-
-        var decimals = 0;
-        while (step != Math.Floor(step) && decimals < 10)
-        {
-            step *= 10;
-            decimals++;
-        }
-
-        return decimals;
-    }
+            Id = t.Id,
+            Title = t.Title,
+            Price = t.Price,
+            CurrencyCode = t.CurrencyCode,
+            FormattedPrice = t.FormattedPrice,
+            BillingDuration = t.BillingDuration,
+            BillingPeriod = t.BillingPeriod,
+            IncludedTokensCount = t.IncludedTokensCount,
+            LimitIssuesPerMonth = t.LimitIssuesPerMonth,
+        },
+        _ => throw new InvalidOperationException($"Unmapped team tariff type '{tariff.GetType()}'."),
+    };
 }
 
 public record GetServiceTariffsRequest
@@ -246,7 +100,7 @@ public abstract record Subscription
     public required string FormattedPrice { get; set; }
 
     /// <summary>
-    /// Null when <see cref="BillingPeriod"/> is <see cref="Entities.BillingPeriod.Forever"/>.
+    /// Null when <see cref="BillingPeriod"/> is <see cref="DataAccess.Entities.BillingPeriod.Forever"/>.
     /// </summary>
     public int? BillingDuration { get; set; }
     public BillingPeriod BillingPeriod { get; set; }

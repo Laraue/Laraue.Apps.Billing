@@ -6,6 +6,7 @@
     <PackageProjectUrl>https://github.com/win7user10/Laraue.Apps.Billing</PackageProjectUrl>
     <!-- Designate all projects as non-package projects by default -->
     <IsPackable>false</IsPackable>
+    <Version>0.0.1</Version>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -22,7 +23,12 @@
     <NpgsqlEfCoreVersion>10.0.0</NpgsqlEfCoreVersion>
     <EfCoreNamingConventionsVersion>10.0.1</EfCoreNamingConventionsVersion>
     <MicrosoftExtensionsHttpVersion>10.0.0</MicrosoftExtensionsHttpVersion>
+    <MicrosoftExtensionsDependencyInjectionAbstractionsVersion>10.0.0</MicrosoftExtensionsDependencyInjectionAbstractionsVersion>
     <MicrosoftOpenApiVersion>10.0.9</MicrosoftOpenApiVersion>
+    <GrpcAspNetCoreServerVersion>2.66.0</GrpcAspNetCoreServerVersion>
+    <GrpcToolsVersion>2.66.0</GrpcToolsVersion>
+    <GoogleProtobufVersion>3.28.3</GoogleProtobufVersion>
+    <LaraueGrpcVersion>0.0.1</LaraueGrpcVersion>
     <OpenTelemetryExtensionsHostingVersion>1.18.0</OpenTelemetryExtensionsHostingVersion>
     <OpenTelemetryExporterPrometheusAspNetCoreVersion>1.18.0-beta.1</OpenTelemetryExporterPrometheusAspNetCoreVersion>
     <OpenTelemetryInstrumentationAspNetCoreVersion>1.18.0</OpenTelemetryInstrumentationAspNetCoreVersion>

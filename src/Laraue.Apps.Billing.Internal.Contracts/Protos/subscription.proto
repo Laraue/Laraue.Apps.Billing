@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+option csharp_namespace = "Laraue.Apps.Billing.Internal.Contracts";
+package laraue.apps.billing.internal.v1;
+
+// Service-to-service contract other Laraue apps call directly to check whether a user/organization
+// has an active paid subscription for them, and if so, with which limits (tariffs differ per
+// calling service - see LaraueBoardsPersonalSubscription/LaraueBoardsTeamSubscription/
+// MarkdownTranslatorSubscription). Returns NOT_FOUND (not a response variant) when there's no
+// active subscription.
+service SubscriptionService {
+  rpc GetActivePersonalSubscription (GetActivePersonalSubscriptionRequest) returns (ActiveSubscriptionResponse);
+  rpc GetActiveOrganizationSubscription (GetActiveOrganizationSubscriptionRequest) returns (ActiveSubscriptionResponse);
+}
+
+enum ServiceId {
+  SERVICE_ID_UNSPECIFIED = 0;
+  SERVICE_ID_LARAUE_BOARDS = 1;
+  SERVICE_ID_MARKDOWN_TRANSLATOR = 2;
+}
+
+message GetActivePersonalSubscriptionRequest {
+  ServiceId service_id = 1;
+  string user_id = 2;
+}
+
+message GetActiveOrganizationSubscriptionRequest {
+  ServiceId service_id = 1;
+  string organization_id = 2;
+}
+
+message ActiveSubscriptionResponse {
+  string code = 1;
+
+  oneof payload {
+    LaraueBoardsPersonalSubscription laraue_boards_personal = 2;
+    LaraueBoardsTeamSubscription laraue_boards_team = 3;
+    MarkdownTranslatorSubscription markdown_translator = 4;
+  }
+}
+
+message LaraueBoardsPersonalSubscription {
+  optional int32 limit_issues_per_month = 1;
+  optional int32 limit_free_team_organizations_count = 2;
+}
+
+message LaraueBoardsTeamSubscription {
+  optional int32 limit_issues_per_month = 1;
+}
+
+message MarkdownTranslatorSubscription {
+  int64 included_daily_free_tokens_count = 1;
+}

@@ -11,15 +11,34 @@ EF Core `DatabaseContext`, entity models, migrations, and the static reference d
 currency rates, services, token packs) seeded via `HasData`.
 
 ### Laraue.Apps.Billing.Internal.Contracts
-Request/response/interface shapes for the service-to-service contract other apps will call
-(`ISubscriptionService`, `ITokenService`). Not implemented yet - see [AGENTS.md](AGENTS.md).
+The gRPC contract other apps call directly: `subscription.proto`
+(`SubscriptionService.GetActivePersonalSubscription`/`GetActiveOrganizationSubscription`) plus its
+generated client/server stubs, served by `InternalApiHost`/`InternalApiServices`. `ITokenService`
+is still a plain C# sketch, not yet a proto contract or implemented anywhere - see
+[AGENTS.md](AGENTS.md).
 
-### Laraue.Apps.Billing.WebApiServices
-Business logic for the public web API, e.g. `TariffService` (currency conversion, rounding, and
-formatting for a service's tariffs).
+Published to NuGet.org as `Laraue.Apps.Billing.Internal.Contracts` on every push, from any branch
+(see `.github/workflows/nuget-publish.yml`) - `main` publishes the real version, any other branch
+publishes a `-alpha.<run number>` prerelease so another service can integrate against an
+in-progress contract change before it merges.
+
+### Laraue.Apps.Billing.Services
+Business logic shared across hosts (not tied to any one of them), e.g. `TariffService` (currency
+conversion, rounding, and formatting for a service's tariffs) and `SubscriptionService` (active
+subscription lookup, keyed by service + user/organization).
 
 ### Laraue.Apps.Billing.WebApiHost
-The ASP.NET host: `Program.cs`, DI wiring, controllers.
+The public ASP.NET web host: `Program.cs`, DI wiring, and its own `Controllers/TariffsController`.
+
+### Laraue.Apps.Billing.InternalApiServices
+The gRPC-facing implementation of `Internal.Contracts` (`SubscriptionGrpcService`), mapping between
+the wire contract and `Laraue.Apps.Billing.Services`. Kept separate from `InternalApiHost` so the
+host project stays bootstrap-only.
+
+### Laraue.Apps.Billing.InternalApiHost
+The internal gRPC host: `Program.cs` only (Kestrel, DI, OpenTelemetry wiring, migrations on
+startup) - no service implementations of its own. Listens on plain HTTP/2 (h2c, no TLS), since
+this is trusted service-to-service traffic, not public-facing.
 
 ## Local run
 
