@@ -20,6 +20,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Laraue.Apps.Billing.InternalApiServices", "src\Laraue.Apps.Billing.InternalApiServices\Laraue.Apps.Billing.InternalApiServices.csproj", "{4AA5183E-0741-4A11-A86D-068D688128C7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Laraue.Apps.Billing.WebApiServices", "src\Laraue.Apps.Billing.WebApiServices\Laraue.Apps.Billing.WebApiServices.csproj", "{5D6A0161-3D41-4B72-A66C-2260889C24EA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -114,6 +116,18 @@ Global
 		{4AA5183E-0741-4A11-A86D-068D688128C7}.Release|x64.Build.0 = Release|Any CPU
 		{4AA5183E-0741-4A11-A86D-068D688128C7}.Release|x86.ActiveCfg = Release|Any CPU
 		{4AA5183E-0741-4A11-A86D-068D688128C7}.Release|x86.Build.0 = Release|Any CPU
+		{5D6A0161-3D41-4B72-A66C-2260889C24EA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5D6A0161-3D41-4B72-A66C-2260889C24EA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5D6A0161-3D41-4B72-A66C-2260889C24EA}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{5D6A0161-3D41-4B72-A66C-2260889C24EA}.Debug|x64.Build.0 = Debug|Any CPU
+		{5D6A0161-3D41-4B72-A66C-2260889C24EA}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{5D6A0161-3D41-4B72-A66C-2260889C24EA}.Debug|x86.Build.0 = Debug|Any CPU
+		{5D6A0161-3D41-4B72-A66C-2260889C24EA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5D6A0161-3D41-4B72-A66C-2260889C24EA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5D6A0161-3D41-4B72-A66C-2260889C24EA}.Release|x64.ActiveCfg = Release|Any CPU
+		{5D6A0161-3D41-4B72-A66C-2260889C24EA}.Release|x64.Build.0 = Release|Any CPU
+		{5D6A0161-3D41-4B72-A66C-2260889C24EA}.Release|x86.ActiveCfg = Release|Any CPU
+		{5D6A0161-3D41-4B72-A66C-2260889C24EA}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -127,5 +141,6 @@ Global
 		{C1E4A8B2-6D3F-4A9E-8B5C-2F7D8E1A9C34} = {6A5D7B3A-8F1A-4A5F-9F0C-1B7B7D9A6B21}
 		{DF3B2E01-95F9-4C31-8D43-E3797EEBC56C} = {5563ACB5-3B77-4AEE-8B67-209330935856}
 		{4AA5183E-0741-4A11-A86D-068D688128C7} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{5D6A0161-3D41-4B72-A66C-2260889C24EA} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

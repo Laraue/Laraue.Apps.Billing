@@ -8,7 +8,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Laraue.Apps.Billing.DataAccess\Laraue.Apps.Billing.DataAccess.csproj" />
-      <ProjectReference Include="..\Laraue.Apps.Billing.Services\Laraue.Apps.Billing.Services.csproj" />
+      <ProjectReference Include="..\Laraue.Apps.Billing.WebApiServices\Laraue.Apps.Billing.WebApiServices.csproj" />
     </ItemGroup>
     
     <ItemGroup>

@@ -1,6 +1,5 @@
 using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.InternalApiServices;
-using Laraue.Apps.Billing.Services;
 using Laraue.Grpc.OpenTelemetry;
 using Laraue.Grpc.Server;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -28,7 +27,7 @@ public sealed class Program
             .UseNpgsql(connection)
             .UseSnakeCaseNamingConvention());
 
-        builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+        builder.Services.AddInternalApiServices();
 
         builder.Services
             .AddGrpc()
