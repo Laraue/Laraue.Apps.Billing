@@ -2,11 +2,11 @@ using System.Globalization;
 using System.Text.Json.Serialization;
 using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.DataAccess.Entities;
-using Laraue.Apps.Billing.WebApiServices.Resources;
+using Laraue.Apps.Billing.Services.Resources;
 using Laraue.Core.Exceptions.Web;
 using Microsoft.EntityFrameworkCore;
 
-namespace Laraue.Apps.Billing.WebApiServices;
+namespace Laraue.Apps.Billing.Services;
 
 public interface ITariffService
 {

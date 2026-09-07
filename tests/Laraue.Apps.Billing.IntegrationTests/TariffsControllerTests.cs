@@ -1,7 +1,7 @@
 using Laraue.Apps.Billing.DataAccess.Entities;
 using Laraue.Apps.Billing.IntegrationTests.Infrastructure;
 using Laraue.Apps.Billing.WebApiHost.Controllers;
-using Laraue.Apps.Billing.WebApiServices;
+using Laraue.Apps.Billing.Services;
 using Laraue.Core.Exceptions.Web;
 
 namespace Laraue.Apps.Billing.IntegrationTests;

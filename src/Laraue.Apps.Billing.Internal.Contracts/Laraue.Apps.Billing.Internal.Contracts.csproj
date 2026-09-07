@@ -6,4 +6,14 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
+    <ItemGroup>
+        <PackageReference Include="Grpc.AspNetCore.Server" Version="$(GrpcAspNetCoreServerVersion)" />
+        <PackageReference Include="Grpc.Tools" Version="$(GrpcToolsVersion)" PrivateAssets="All" />
+        <PackageReference Include="Google.Protobuf" Version="$(GoogleProtobufVersion)" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Protobuf Include="Protos\subscription.proto" GrpcServices="Both" />
+    </ItemGroup>
+
 </Project>

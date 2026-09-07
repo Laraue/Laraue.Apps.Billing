@@ -15,12 +15,17 @@ Exposed via one surface today:
 - A public web API (`Laraue.Apps.Billing.WebApiHost`) that returns tariffs for a service in a given
   currency, for frontend pricing pages. See `TariffsController`/`TariffService`.
 
-`Laraue.Apps.Billing.Internal.Contracts` additionally defines the *intended* service-to-service
-contract other apps will call directly (`ISubscriptionService`/`ILaraueBoardsSubscriptionService`
-for "does this user/org have an active subscription", `ITokenService` for reserving/committing/
-cancelling token spend). These interfaces are designed and documented (see the conversation-style
-comments above each interface in that project) but **not yet implemented** anywhere in this repo -
-there's no controller or gRPC/internal endpoint serving them yet. Don't assume they're wired up.
+`Laraue.Apps.Billing.Internal.Contracts` additionally holds the gRPC contract other apps will call
+directly for "does this user/org have an active subscription": `Protos/subscription.proto`
+(`SubscriptionService.GetActivePersonalSubscription`/`GetActiveOrganizationSubscription`, response
+polymorphic per calling service via a protobuf `oneof` - see the message comments in the `.proto`
+itself), built with `GrpcServices="Both"` so it ships both the client stub (for callers like
+`Laraue.Apps.Boards`) and the server base class from one package. Uses
+[`Laraue.Grpc`](https://github.com/Laraue/Laraue.Grpc) (`Laraue.Grpc.Server`/`.Client`/
+`.OpenTelemetry`) for interceptor-based tracing/metrics on both sides - see that repo's readme for
+how it works. **Not yet implemented by any host** - no `InternalApiHost` project or gRPC endpoint
+exists yet, this is in progress. `ITokenService` (token reserve/commit/cancel) is still a plain C#
+interface sketch, not a proto contract, and also not implemented anywhere.
 
 ## Domain model
 
@@ -72,13 +77,25 @@ Solution: `Laraue.Apps.Billing.sln`
 
 - `src/Laraue.Apps.Billing.DataAccess` - EF Core `DatabaseContext`, entities, migrations, and the
   static seed data (`Data/*.cs`).
-- `src/Laraue.Apps.Billing.Internal.Contracts` - host-agnostic request/response/interface shapes
-  for the service-to-service contract other apps will consume (see "What this project is" above).
-  No implementation, no DB/ASP.NET dependencies - kept minimal so it could be shared as a package.
-- `src/Laraue.Apps.Billing.WebApiServices` - business logic for the public web API (`TariffService`),
-  plus `Resources/Errors.resx` for user-facing error text.
-- `src/Laraue.Apps.Billing.WebApiHost` - ASP.NET host: `Program.cs`, `WebApplicationBuilderExtensions`
-  (DI wiring split into `AddDatabaseServices`/`AddApplicationServices`), controllers.
+- `src/Laraue.Apps.Billing.Internal.Contracts` - the `.proto` service-to-service contract other apps
+  will consume plus its generated stubs (see "What this project is" above). No implementation, no
+  DB/ASP.NET dependencies - kept minimal so it could be shared as a package.
+- `src/Laraue.Apps.Billing.Services` - business logic shared across hosts, not tied to any one of
+  them (`TariffService`, ...), plus `Resources/Errors.resx` for user-facing error text. Named
+  `Services`, not `WebApiServices`, because it's meant to be referenced by every host in this repo
+  (the web API today, an internal gRPC host in progress) - don't reintroduce a web-specific name.
+- `src/Laraue.Apps.Billing.WebApiHost` - the public ASP.NET host: `Program.cs`,
+  `WebApplicationBuilderExtensions` (DI wiring split into `AddDatabaseServices`/
+  `AddApplicationServices`), and its (thin) `Controllers/TariffsController`. Controllers stay in the
+  host - unlike the gRPC side below, there's no separate project for them.
+- `src/Laraue.Apps.Billing.InternalApiServices` - the gRPC-facing implementation of
+  `Internal.Contracts` (`SubscriptionGrpcService`, mapping wire types <-> `Laraue.Apps.Billing.Services`
+  DTOs). Kept out of `InternalApiHost` on purpose - see the next bullet.
+- `src/Laraue.Apps.Billing.InternalApiHost` - the internal gRPC host: `Program.cs` only
+  (Kestrel/DI/OpenTelemetry wiring, migrations on startup). No gRPC service implementations of its
+  own - those belong in `InternalApiServices` instead. This is an intentional asymmetry with
+  `WebApiHost` above (which does keep its controllers directly), not an inconsistency to "fix" by
+  moving controllers out too - that was tried and reverted.
 - `tests/Laraue.Apps.Billing.IntegrationTests` - the only test project, structured the same way as
   `Laraue.Apps.Boards`'s integration tests (see "Testing" below).
 
