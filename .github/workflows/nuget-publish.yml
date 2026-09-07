@@ -1,6 +1,7 @@
 # Packs and publishes every packable project (IsPackable=true - today just
-# Laraue.Apps.Billing.Internal.Contracts) to NuGet.org, on every branch, independent of the
-# build-and-test/deploy pipeline in dotnet.yml.
+# Laraue.Apps.Billing.Internal.Contracts) to NuGet.org, independent of the build-and-test/deploy
+# pipeline in dotnet.yml. Manual trigger only (workflow_dispatch) - run it from the Actions tab on
+# whichever branch you want to publish from.
 #
 # Versioning: the base <Version> in Directory.Build.props is published as-is from `main`. Any other
 # branch gets `-alpha.<run number>` appended (e.g. 0.0.1-alpha.42) so a service can pull a specific
@@ -10,8 +11,6 @@
 name: NuGet Publish
 
 on:
-  push:
-    branches: [ "**" ]
   workflow_dispatch:
 
 jobs:
