@@ -128,6 +128,18 @@ Solution: `Laraue.Apps.Billing.sln`
   own - those belong in `InternalApiServices` instead. This is an intentional asymmetry with
   `WebApiHost` above (which does keep its controllers directly), not an inconsistency to "fix" by
   moving controllers out too - that was tried and reverted.
+  Listens on **two separate ports** (`Kestrel:GrpcPort`/`:HealthPort` in config, 5263/5264 by
+  default) - one HTTP/2-only for gRPC, one HTTP/1.1-only for `/_health`/`/_metrics`. This isn't a
+  stylistic choice: Kestrel cannot multiplex HTTP/1.1 and cleartext HTTP/2 (h2c) on the *same*
+  endpoint without TLS (no ALPN to pick per-connection) - a single endpoint declared
+  `HttpProtocols.Http1AndHttp2` over plaintext silently downgrades to HTTP/1.1-only, which breaks
+  every gRPC call with a client-side `HTTP_1_1_REQUIRED` error. This host originally used exactly
+  that single-endpoint config (with a comment claiming it was fine) - confirmed broken by actually
+  running the host and calling it over a real socket, not just via
+  `WebApplicationFactory`'s in-memory `TestServer` (which bypasses Kestrel's real listen config
+  entirely and never exercises this - this repo's own integration tests didn't catch it either). If
+  you ever "simplify" this back to one shared `Http1AndHttp2` endpoint, you will silently
+  reintroduce this bug.
 
 Each host follows a `Host -> Host{Services} -> Services` layering: the shared `Services` project
 stays host-agnostic (core domain logic + raw/`Core*` DTOs, no per-host response shape) and is never
