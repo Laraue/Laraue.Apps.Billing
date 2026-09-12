@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Laraue.Apps.Billing.IntegrationTests;
 
+[Collection("IntegrationTest")]
 public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHost>, IAsyncLifetime
 {
     private static readonly Guid PlusTariffId = LaraueBoardsTariffsData.PersonalTariffs[1].Tariff.Id;

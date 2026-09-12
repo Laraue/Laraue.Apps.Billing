@@ -127,9 +127,17 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("limit_free_team_organizations_count");
 
+                    b.Property<int?>("LimitFreeTeamOrganizationsCountMvpOverride")
+                        .HasColumnType("integer")
+                        .HasColumnName("limit_free_team_organizations_count_mvp_override");
+
                     b.Property<int?>("LimitIssuesPerMonth")
                         .HasColumnType("integer")
                         .HasColumnName("limit_issues_per_month");
+
+                    b.Property<int?>("LimitIssuesPerMonthMvpOverride")
+                        .HasColumnType("integer")
+                        .HasColumnName("limit_issues_per_month_mvp_override");
 
                     b.HasKey("Id")
                         .HasName("pk_laraue_boards_personal_tariffs");
@@ -141,7 +149,9 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         {
                             Id = new Guid("bd5f3457-601d-4ef1-92b2-47353f6b5a8f"),
                             LimitFreeTeamOrganizationsCount = 1,
-                            LimitIssuesPerMonth = 500
+                            LimitFreeTeamOrganizationsCountMvpOverride = 1000,
+                            LimitIssuesPerMonth = 500,
+                            LimitIssuesPerMonthMvpOverride = 200000
                         },
                         new
                         {
@@ -160,6 +170,10 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("limit_issues_per_month");
 
+                    b.Property<int?>("LimitIssuesPerMonthMvpOverride")
+                        .HasColumnType("integer")
+                        .HasColumnName("limit_issues_per_month_mvp_override");
+
                     b.HasKey("Id")
                         .HasName("pk_laraue_boards_team_tariffs");
 
@@ -169,7 +183,8 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         new
                         {
                             Id = new Guid("d42ebf59-008f-4a1e-8a00-c00f27331e86"),
-                            LimitIssuesPerMonth = 500
+                            LimitIssuesPerMonth = 500,
+                            LimitIssuesPerMonthMvpOverride = 200000
                         },
                         new
                         {
@@ -352,6 +367,10 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("included_tokens_count");
 
+                    b.Property<long?>("IncludedTokensCountMvpOverride")
+                        .HasColumnType("bigint")
+                        .HasColumnName("included_tokens_count_mvp_override");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
@@ -381,6 +400,7 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                             Id = new Guid("bd5f3457-601d-4ef1-92b2-47353f6b5a8f"),
                             BillingPeriod = 1,
                             IncludedTokensCount = 0L,
+                            IncludedTokensCountMvpOverride = 2500000L,
                             IsActive = true,
                             Price = 0,
                             Title = "Free",
@@ -401,6 +421,7 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                             Id = new Guid("d42ebf59-008f-4a1e-8a00-c00f27331e86"),
                             BillingPeriod = 1,
                             IncludedTokensCount = 0L,
+                            IncludedTokensCountMvpOverride = 2500000L,
                             IsActive = true,
                             Price = 0,
                             Title = "Free",
@@ -431,6 +452,7 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                             Id = new Guid("33c1fcec-e6ed-47eb-a64c-27e3deb41038"),
                             BillingPeriod = 1,
                             IncludedTokensCount = 0L,
+                            IncludedTokensCountMvpOverride = 1200000L,
                             IsActive = true,
                             Price = 0,
                             Title = "Free",
@@ -553,9 +575,18 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("delta");
 
+                    b.Property<string>("Error")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("error");
+
                     b.Property<DateTime?>("FinishedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("finished_at");
+
+                    b.Property<int>("InputTokensCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("input_tokens_count");
 
                     b.Property<Guid>("OwnerId")
                         .HasColumnType("uuid")
@@ -568,6 +599,10 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                     b.Property<int>("Reason")
                         .HasColumnType("integer")
                         .HasColumnName("reason");
+
+                    b.Property<long>("ReservedAmount")
+                        .HasColumnType("bigint")
+                        .HasColumnName("reserved_amount");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer")
