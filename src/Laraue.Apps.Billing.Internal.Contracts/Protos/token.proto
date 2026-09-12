@@ -1,7 +1,5 @@
 syntax = "proto3";
 
-import "Protos/subscription.proto";
-
 option csharp_namespace = "Laraue.Apps.Billing.Internal.Contracts";
 package laraue.apps.billing.internal.v1;
 
@@ -11,6 +9,11 @@ package laraue.apps.billing.internal.v1;
 // outright if the operation never ran. See ReserveTokens/CommitTokensSpent/CancelTokensReservation
 // below for the exact flow. Insufficient balance on ReserveTokens is FAILED_PRECONDITION, not a
 // response variant; an unknown token_transaction_id on Commit/Cancel is NOT_FOUND.
+//
+// Which service is calling is identified once per client via the "x-laraue-service-id" metadata
+// header (see GrpcHeaders.ServiceIdHeaderName in this package, value = the numeric ServiceId
+// below), not repeated on every request message - a client is always the same service for the
+// lifetime of its channel, so it belongs at the connection/interceptor level, not in the payload.
 service TokenService {
   rpc ReserveTokens (ReserveTokensRequest) returns (ReserveTokensResponse);
   rpc CommitTokensSpent (CommitTokensSpentRequest) returns (CommitTokensSpentResponse);
@@ -18,10 +21,9 @@ service TokenService {
 }
 
 message ReserveTokensRequest {
-  ServiceId service_id = 1;
-  string paid_entity_id = 2;
-  int32 input_tokens_count = 3;
-  int32 max_output_tokens_count = 4;
+  string paid_entity_id = 1;
+  int32 input_tokens_count = 2;
+  int32 max_output_tokens_count = 3;
 }
 
 message ReserveTokensResponse {

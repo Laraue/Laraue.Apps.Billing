@@ -1,6 +1,7 @@
 using Grpc.Core;
 using ContractsServiceId = Laraue.Apps.Billing.Internal.Contracts.ServiceId;
 using DomainServiceId = Laraue.Apps.Billing.DataAccess.Entities.ServiceId;
+using GrpcHeaders = Laraue.Apps.Billing.Internal.Contracts.GrpcHeaders;
 
 namespace Laraue.Apps.Billing.InternalApiServices;
 
@@ -23,4 +24,24 @@ internal static class GrpcParsing
         ContractsServiceId.MarkdownTranslator => DomainServiceId.MarkdownTranslator,
         _ => throw new RpcException(new Status(StatusCode.InvalidArgument, $"Unknown service '{serviceId}'.")),
     };
+
+    /// <summary>
+    /// Reads the calling service's id from the <see cref="GrpcHeaders.ServiceIdHeaderName"/>
+    /// metadata header - for contracts (like <c>token.proto</c>) that identify the caller once per
+    /// client channel via a header/interceptor rather than a request field. See the note atop
+    /// <c>token.proto</c>.
+    /// </summary>
+    public static DomainServiceId ReadDomainServiceId(ServerCallContext context)
+    {
+        var header = context.RequestHeaders.Get(GrpcHeaders.ServiceIdHeaderName)?.Value;
+
+        if (header is null || !int.TryParse(header, out var rawServiceId))
+        {
+            throw new RpcException(new Status(
+                StatusCode.InvalidArgument,
+                $"Missing or invalid '{GrpcHeaders.ServiceIdHeaderName}' header."));
+        }
+
+        return ToDomainServiceId((ContractsServiceId)rawServiceId);
+    }
 }

@@ -20,7 +20,7 @@ public sealed class TokenGrpcService(ITokenService tokenService)
         ServerCallContext context)
     {
         var result = await tokenService.TryReserveTokensAsync(
-            GrpcParsing.ToDomainServiceId(request.ServiceId),
+            GrpcParsing.ReadDomainServiceId(context),
             GrpcParsing.ParseGuid(request.PaidEntityId, nameof(request.PaidEntityId)),
             request.InputTokensCount,
             request.MaxOutputTokensCount,
