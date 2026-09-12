@@ -3,6 +3,7 @@ using System;
 using Laraue.Apps.Billing.DataAccess;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Laraue.Apps.Billing.DataAccess.Migrations
 {
     [DbContext(typeof(DatabaseContext))]
-    partial class DatabaseContextModelSnapshot : ModelSnapshot
+    [Migration("20260912122639_AddTokenSpendReservationFields")]
+    partial class AddTokenSpendReservationFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -127,17 +130,9 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("limit_free_team_organizations_count");
 
-                    b.Property<int?>("LimitFreeTeamOrganizationsCountMvpOverride")
-                        .HasColumnType("integer")
-                        .HasColumnName("limit_free_team_organizations_count_mvp_override");
-
                     b.Property<int?>("LimitIssuesPerMonth")
                         .HasColumnType("integer")
                         .HasColumnName("limit_issues_per_month");
-
-                    b.Property<int?>("LimitIssuesPerMonthMvpOverride")
-                        .HasColumnType("integer")
-                        .HasColumnName("limit_issues_per_month_mvp_override");
 
                     b.HasKey("Id")
                         .HasName("pk_laraue_boards_personal_tariffs");
@@ -149,9 +144,7 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         {
                             Id = new Guid("bd5f3457-601d-4ef1-92b2-47353f6b5a8f"),
                             LimitFreeTeamOrganizationsCount = 1,
-                            LimitFreeTeamOrganizationsCountMvpOverride = 1000,
-                            LimitIssuesPerMonth = 500,
-                            LimitIssuesPerMonthMvpOverride = 200000
+                            LimitIssuesPerMonth = 500
                         },
                         new
                         {
@@ -170,10 +163,6 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("limit_issues_per_month");
 
-                    b.Property<int?>("LimitIssuesPerMonthMvpOverride")
-                        .HasColumnType("integer")
-                        .HasColumnName("limit_issues_per_month_mvp_override");
-
                     b.HasKey("Id")
                         .HasName("pk_laraue_boards_team_tariffs");
 
@@ -183,8 +172,7 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         new
                         {
                             Id = new Guid("d42ebf59-008f-4a1e-8a00-c00f27331e86"),
-                            LimitIssuesPerMonth = 500,
-                            LimitIssuesPerMonthMvpOverride = 200000
+                            LimitIssuesPerMonth = 500
                         },
                         new
                         {
@@ -367,10 +355,6 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("included_tokens_count");
 
-                    b.Property<long?>("IncludedTokensCountMvpOverride")
-                        .HasColumnType("bigint")
-                        .HasColumnName("included_tokens_count_mvp_override");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
@@ -400,7 +384,6 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                             Id = new Guid("bd5f3457-601d-4ef1-92b2-47353f6b5a8f"),
                             BillingPeriod = 1,
                             IncludedTokensCount = 0L,
-                            IncludedTokensCountMvpOverride = 2500000L,
                             IsActive = true,
                             Price = 0,
                             Title = "Free",
@@ -421,7 +404,6 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                             Id = new Guid("d42ebf59-008f-4a1e-8a00-c00f27331e86"),
                             BillingPeriod = 1,
                             IncludedTokensCount = 0L,
-                            IncludedTokensCountMvpOverride = 2500000L,
                             IsActive = true,
                             Price = 0,
                             Title = "Free",
@@ -452,7 +434,6 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                             Id = new Guid("33c1fcec-e6ed-47eb-a64c-27e3deb41038"),
                             BillingPeriod = 1,
                             IncludedTokensCount = 0L,
-                            IncludedTokensCountMvpOverride = 1200000L,
                             IsActive = true,
                             Price = 0,
                             Title = "Free",
@@ -642,7 +623,7 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("purchased_token_pack_id");
 
-                    b.Property<Guid>("TokenTransactionId")
+                    b.Property<Guid?>("TokenTransactionId")
                         .HasColumnType("uuid")
                         .HasColumnName("token_transaction_id");
 
@@ -774,16 +755,12 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_token_transaction_purchased_token_packs_purchased_token_pac");
 
-                    b.HasOne("Laraue.Apps.Billing.DataAccess.Entities.TokenTransaction", "TokenTransaction")
+                    b.HasOne("Laraue.Apps.Billing.DataAccess.Entities.TokenTransaction", null)
                         .WithMany("PurchasedTokensSpent")
                         .HasForeignKey("TokenTransactionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
                         .HasConstraintName("fk_token_transaction_purchased_token_packs_token_transactions_");
 
                     b.Navigation("PurchasedTokenPack");
-
-                    b.Navigation("TokenTransaction");
                 });
 
             modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.TokenTransactionSubscriptionTokenPack", b =>

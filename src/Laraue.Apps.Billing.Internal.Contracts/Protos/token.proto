@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+option csharp_namespace = "Laraue.Apps.Billing.Internal.Contracts";
+package laraue.apps.billing.internal.v1;
+
+// Service-to-service contract for spending a paid entity's tokens. The caller reserves an upper
+// bound before starting an operation whose real cost isn't known yet (e.g. an LLM call sized by
+// max output tokens), then either commits the actual amount spent or cancels the reservation
+// outright if the operation never ran. See ReserveTokens/CommitTokensSpent/CancelTokensReservation
+// below for the exact flow. Insufficient balance on ReserveTokens is FAILED_PRECONDITION, not a
+// response variant; an unknown token_transaction_id on Commit/Cancel is NOT_FOUND.
+//
+// Which service is calling is identified once per client via the "x-laraue-service-id" metadata
+// header (see GrpcHeaders.ServiceIdHeaderName in this package, value = the numeric ServiceId
+// below), not repeated on every request message - a client is always the same service for the
+// lifetime of its channel, so it belongs at the connection/interceptor level, not in the payload.
+service TokenService {
+  rpc ReserveTokens (ReserveTokensRequest) returns (ReserveTokensResponse);
+  rpc CommitTokensSpent (CommitTokensSpentRequest) returns (CommitTokensSpentResponse);
+  rpc CancelTokensReservation (CancelTokensReservationRequest) returns (CancelTokensReservationResponse);
+}
+
+message ReserveTokensRequest {
+  string paid_entity_id = 1;
+  int32 input_tokens_count = 2;
+  int32 max_output_tokens_count = 3;
+}
+
+message ReserveTokensResponse {
+  string token_transaction_id = 1;
+}
+
+message CommitTokensSpentRequest {
+  string token_transaction_id = 1;
+  int32 actual_output_tokens_count = 2;
+}
+
+message CommitTokensSpentResponse {
+}
+
+message CancelTokensReservationRequest {
+  string token_transaction_id = 1;
+  string error = 2;
+}
+
+message CancelTokensReservationResponse {
+}

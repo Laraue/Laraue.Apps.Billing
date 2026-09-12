@@ -3,6 +3,7 @@ using System;
 using Laraue.Apps.Billing.DataAccess;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Laraue.Apps.Billing.DataAccess.Migrations
 {
     [DbContext(typeof(DatabaseContext))]
-    partial class DatabaseContextModelSnapshot : ModelSnapshot
+    [Migration("20260912202054_AddMvpLimitOverrides")]
+    partial class AddMvpLimitOverrides
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -642,7 +645,7 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("purchased_token_pack_id");
 
-                    b.Property<Guid>("TokenTransactionId")
+                    b.Property<Guid?>("TokenTransactionId")
                         .HasColumnType("uuid")
                         .HasColumnName("token_transaction_id");
 
@@ -774,16 +777,12 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_token_transaction_purchased_token_packs_purchased_token_pac");
 
-                    b.HasOne("Laraue.Apps.Billing.DataAccess.Entities.TokenTransaction", "TokenTransaction")
+                    b.HasOne("Laraue.Apps.Billing.DataAccess.Entities.TokenTransaction", null)
                         .WithMany("PurchasedTokensSpent")
                         .HasForeignKey("TokenTransactionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
                         .HasConstraintName("fk_token_transaction_purchased_token_packs_token_transactions_");
 
                     b.Navigation("PurchasedTokenPack");
-
-                    b.Navigation("TokenTransaction");
                 });
 
             modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.TokenTransactionSubscriptionTokenPack", b =>
