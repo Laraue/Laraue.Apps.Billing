@@ -10,6 +10,7 @@ public static class ServiceCollectionExtensions
         public IServiceCollection AddInternalApiServices()
         {
             services.AddScoped<ISubscriptionService, SubscriptionService>();
+            services.AddScoped<ITokenService, TokenService>();
 
             return services;
         }

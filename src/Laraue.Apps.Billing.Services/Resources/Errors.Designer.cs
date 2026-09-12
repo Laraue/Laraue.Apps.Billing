@@ -76,5 +76,32 @@ namespace Laraue.Apps.Billing.Services.Resources {
                 return ResourceManager.GetString("UnknownService", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Insufficient token balance..
+        /// </summary>
+        internal static string InsufficientTokenBalance {
+            get {
+                return ResourceManager.GetString("InsufficientTokenBalance", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Token transaction &apos;{0}&apos; was not found..
+        /// </summary>
+        internal static string TokenTransactionNotFound {
+            get {
+                return ResourceManager.GetString("TokenTransactionNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Token transaction &apos;{0}&apos; is not in a startable state (current status: &apos;{1}&apos;)..
+        /// </summary>
+        internal static string TokenTransactionNotStarted {
+            get {
+                return ResourceManager.GetString("TokenTransactionNotStarted", resourceCulture);
+            }
+        }
     }
 }

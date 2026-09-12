@@ -28,6 +28,19 @@ public interface ISubscriptionService
         ServiceId serviceId,
         Guid organizationId,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns the id of <paramref name="paidEntityId"/>'s active subscription on
+    /// <paramref name="serviceId"/>, or <see langword="null"/> if it doesn't have one. Used by
+    /// <see cref="TokenService"/> to find which subscription's token balance to draw from -
+    /// callers that need subscription limits should use
+    /// <see cref="GetActivePersonalSubscriptionAsync"/>/<see cref="GetActiveOrganizationSubscriptionAsync"/>
+    /// instead.
+    /// </summary>
+    Task<Guid?> GetActiveSubscriptionIdAsync(
+        ServiceId serviceId,
+        Guid paidEntityId,
+        CancellationToken cancellationToken);
 }
 
 public class SubscriptionService(DatabaseContext context) : ISubscriptionService
@@ -61,6 +74,16 @@ public class SubscriptionService(DatabaseContext context) : ISubscriptionService
         };
     }
 
+    public Task<Guid?> GetActiveSubscriptionIdAsync(
+        ServiceId serviceId,
+        Guid paidEntityId,
+        CancellationToken cancellationToken)
+    {
+        return GetActiveSubscriptionsQuery(serviceId, paidEntityId)
+            .Select(s => (Guid?)s.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
     private async Task<ActiveSubscription?> GetActiveLaraueBoardsPersonalSubscriptionAsync(
         Guid userId,
         CancellationToken cancellationToken)
@@ -69,7 +92,14 @@ public class SubscriptionService(DatabaseContext context) : ISubscriptionService
             .Join(context.LaraueBoardsPersonalTariffs,
                 s => s.TariffId,
                 t => t.Tariff!.Id,
-                (s, t) => new { s.Tariff!.Title, t.LimitIssuesPerMonth, t.LimitFreeTeamOrganizationsCount })
+                (s, t) => new
+                {
+                    s.Tariff!.Title,
+                    t.LimitIssuesPerMonth,
+                    t.LimitIssuesPerMonthMvpOverride,
+                    t.LimitFreeTeamOrganizationsCount,
+                    t.LimitFreeTeamOrganizationsCountMvpOverride,
+                })
             .SingleOrDefaultAsync(cancellationToken);
 
         return row is null
@@ -77,8 +107,9 @@ public class SubscriptionService(DatabaseContext context) : ISubscriptionService
             : new LaraueBoardsPersonalActiveSubscription
             {
                 Code = row.Title,
-                LimitIssuesPerMonth = row.LimitIssuesPerMonth,
-                LimitFreeTeamOrganizationsCount = row.LimitFreeTeamOrganizationsCount,
+                LimitIssuesPerMonth = row.LimitIssuesPerMonthMvpOverride ?? row.LimitIssuesPerMonth,
+                LimitFreeTeamOrganizationsCount =
+                    row.LimitFreeTeamOrganizationsCountMvpOverride ?? row.LimitFreeTeamOrganizationsCount,
             };
     }
 
@@ -90,7 +121,7 @@ public class SubscriptionService(DatabaseContext context) : ISubscriptionService
             .Join(context.LaraueBoardsTeamTariffs,
                 s => s.TariffId,
                 t => t.Tariff!.Id,
-                (s, t) => new { s.Tariff!.Title, t.LimitIssuesPerMonth })
+                (s, t) => new { s.Tariff!.Title, t.LimitIssuesPerMonth, t.LimitIssuesPerMonthMvpOverride })
             .SingleOrDefaultAsync(cancellationToken);
 
         return row is null
@@ -98,7 +129,7 @@ public class SubscriptionService(DatabaseContext context) : ISubscriptionService
             : new LaraueBoardsTeamActiveSubscription
             {
                 Code = row.Title,
-                LimitIssuesPerMonth = row.LimitIssuesPerMonth,
+                LimitIssuesPerMonth = row.LimitIssuesPerMonthMvpOverride ?? row.LimitIssuesPerMonth,
             };
     }
 

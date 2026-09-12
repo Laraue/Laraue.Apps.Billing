@@ -62,6 +62,7 @@ public sealed class Program
         }
 
         app.MapGrpcService<SubscriptionGrpcService>();
+        app.MapGrpcService<TokenGrpcService>();
         app.MapHealthChecks("/_health");
         app.MapPrometheusScrapingEndpoint("/_metrics");
 
