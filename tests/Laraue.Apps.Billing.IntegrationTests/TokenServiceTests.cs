@@ -4,6 +4,7 @@ using Laraue.Apps.Billing.DataAccess.Entities;
 using Laraue.Apps.Billing.IntegrationTests.Infrastructure;
 using Laraue.Apps.Billing.Services;
 using Laraue.Apps.Billing.WebApiHost;
+using Laraue.Core.DateTime.Services.Impl;
 using Laraue.Core.Exceptions.Web;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,7 +27,8 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
         _scope = host.Services.CreateScope();
         _context = _scope.ServiceProvider.GetRequiredService<DatabaseContext>();
         _context.CleanDatabase();
-        _tokenService = new TokenService(_context, new SubscriptionService(_context));
+        var dateTimeProvider = new DateTimeProvider();
+        _tokenService = new TokenService(_context, new SubscriptionService(_context, dateTimeProvider), dateTimeProvider);
         return Task.CompletedTask;
     }
 
@@ -102,6 +104,35 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
         Assert.Null(result.TokenTransactionId);
         Assert.NotNull(result.Error);
         Assert.False(await _context.TokenTransactions.AnyAsync(t => t.PaidEntityId == paidEntityId));
+    }
+
+    [Fact]
+    public async Task TryReserveTokensAsync_ShouldNotDoubleSpend_WhenTwoReservationsRunConcurrently()
+    {
+        var paidEntityId = Guid.NewGuid();
+        await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 1000, subscriptionTokens: 0);
+
+        // Each request alone fits (650 <= 1000), but both together (1300) don't - without the
+        // pg_advisory_xact_lock in TokenService, both could read the same pre-decrement balance,
+        // both pass the sufficiency check, and the second's UPDATE would silently clobber the
+        // first's, leaving the balance at 1000 - 650 = 350 instead of correctly rejecting one.
+        using var otherScope = host.Services.CreateScope();
+        var otherContext = otherScope.ServiceProvider.GetRequiredService<DatabaseContext>();
+        var otherDateTimeProvider = new DateTimeProvider();
+        var otherTokenService = new TokenService(
+            otherContext, new SubscriptionService(otherContext, otherDateTimeProvider), otherDateTimeProvider);
+
+        var results = await Task.WhenAll(
+            _tokenService.TryReserveTokensAsync(
+                ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 550, CancellationToken.None),
+            otherTokenService.TryReserveTokensAsync(
+                ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 550, CancellationToken.None));
+
+        Assert.Single(results, r => r.Error is null);
+        Assert.Single(results, r => r.Error is not null);
+
+        var subscriptionBalance = await _context.BalanceSubscriptionTokens.SingleAsync();
+        Assert.Equal(350, subscriptionBalance.FreeTokensCount);
     }
 
     [Fact]

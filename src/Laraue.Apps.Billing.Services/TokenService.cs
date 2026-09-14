@@ -1,6 +1,7 @@
 using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.DataAccess.Entities;
 using Laraue.Apps.Billing.Services.Resources;
+using Laraue.Core.DateTime.Services.Abstractions;
 using Laraue.Core.Exceptions.Web;
 using Microsoft.EntityFrameworkCore;
 
@@ -59,7 +60,10 @@ public sealed record ReservationResult
     public string? Error { get; init; }
 }
 
-public class TokenService(DatabaseContext context, ISubscriptionService subscriptionService) : ITokenService
+public class TokenService(
+    DatabaseContext context,
+    ISubscriptionService subscriptionService,
+    IDateTimeProvider dateTimeProvider) : ITokenService
 {
     public async Task<ReservationResult> TryReserveTokensAsync(
         ServiceId serviceId,
@@ -69,9 +73,15 @@ public class TokenService(DatabaseContext context, ISubscriptionService subscrip
         CancellationToken cancellationToken)
     {
         var requested = (long)inputTokensCount + maxOutputTokensCount;
-        var now = DateTime.UtcNow;
+        var now = dateTimeProvider.UtcNow;
 
         await using var dbTransaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
+        // Serializes every reserve/commit/cancel for this paidEntityId - without it, two
+        // concurrent reservations read the same pre-decrement balance, both pass the sufficiency
+        // check, and the second's UPDATE silently clobbers the first's (no optimistic-concurrency
+        // token on Balance*Token), leaving the materialized balance higher than it should be.
+        await context.Database.PgAdvisoryXactLock(paidEntityId.ToString(), cancellationToken);
 
         var subscriptionId = await subscriptionService
             .GetActiveSubscriptionIdAsync(serviceId, paidEntityId, cancellationToken);
@@ -204,7 +214,7 @@ public class TokenService(DatabaseContext context, ISubscriptionService subscrip
         }
 
         tokenTransaction.Status = TokenSpentStatus.Confirmed;
-        tokenTransaction.FinishedAt = DateTime.UtcNow;
+        tokenTransaction.FinishedAt = dateTimeProvider.UtcNow;
         tokenTransaction.Delta = -actualSpent;
 
         await context.SaveChangesAsync(cancellationToken);
@@ -223,7 +233,7 @@ public class TokenService(DatabaseContext context, ISubscriptionService subscrip
         await RefundAsync(tokenTransaction, tokenTransaction.ReservedAmount, cancellationToken);
 
         tokenTransaction.Status = TokenSpentStatus.Canceled;
-        tokenTransaction.FinishedAt = DateTime.UtcNow;
+        tokenTransaction.FinishedAt = dateTimeProvider.UtcNow;
         tokenTransaction.Delta = 0;
         tokenTransaction.Error = error;
 
@@ -234,18 +244,30 @@ public class TokenService(DatabaseContext context, ISubscriptionService subscrip
     /// <summary>
     /// Loads just the transaction row itself - not its spend children, which
     /// <see cref="RefundAsync"/> fetches separately only when it actually needs to touch them.
+    /// Locks on the transaction's <c>PaidEntityId</c> *before* the authoritative <c>Status</c>
+    /// check below, not after finding it - otherwise two concurrent commit/cancel calls for the
+    /// same transaction (or one racing a concurrent reservation for the same entity) could both
+    /// read <see cref="TokenSpentStatus.Started"/> before either commits and both refund/finalize
+    /// it, the same class of lost-update race <see cref="TryReserveTokensAsync"/> guards against.
     /// </summary>
     private async Task<TokenTransaction> GetStartedTransactionOrThrowAsync(
         Guid tokenTransactionId,
         CancellationToken cancellationToken)
     {
-        var tokenTransaction = await context.TokenTransactions
-            .SingleOrDefaultAsync(t => t.Id == tokenTransactionId, cancellationToken);
+        var paidEntityId = await context.TokenTransactions
+            .Where(t => t.Id == tokenTransactionId)
+            .Select(t => (Guid?)t.PaidEntityId)
+            .SingleOrDefaultAsync(cancellationToken);
 
-        if (tokenTransaction is null)
+        if (paidEntityId is null)
         {
             throw new NotFoundException(string.Format(Errors.TokenTransactionNotFound, tokenTransactionId));
         }
+
+        await context.Database.PgAdvisoryXactLock(paidEntityId.Value.ToString(), cancellationToken);
+
+        var tokenTransaction = await context.TokenTransactions
+            .SingleAsync(t => t.Id == tokenTransactionId, cancellationToken);
 
         if (tokenTransaction.Status != TokenSpentStatus.Started)
         {

@@ -1,6 +1,7 @@
 using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.DataAccess.Entities;
 using Laraue.Apps.Billing.Services.Resources;
+using Laraue.Core.DateTime.Services.Abstractions;
 using Laraue.Core.Exceptions.Web;
 using Microsoft.EntityFrameworkCore;
 // TariffService.cs declares its own `Subscription` DTO record in this same namespace, which
@@ -43,7 +44,7 @@ public interface ISubscriptionService
         CancellationToken cancellationToken);
 }
 
-public class SubscriptionService(DatabaseContext context) : ISubscriptionService
+public class SubscriptionService(DatabaseContext context, IDateTimeProvider dateTimeProvider) : ISubscriptionService
 {
     public Task<ActiveSubscription?> GetActivePersonalSubscriptionAsync(
         ServiceId serviceId,
@@ -160,7 +161,7 @@ public class SubscriptionService(DatabaseContext context) : ISubscriptionService
     /// </summary>
     private IQueryable<SubscriptionEntity> GetActiveSubscriptionsQuery(ServiceId serviceId, Guid paidEntityId)
     {
-        var now = DateTime.UtcNow;
+        var now = dateTimeProvider.UtcNow;
 
         return context.Subscriptions
             .Where(s => s.ServiceId == serviceId
