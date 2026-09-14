@@ -23,6 +23,13 @@ public class Tariff
 
     public required bool IsActive { get; set; }
 
+    /// <summary>
+    /// Marks the one tariff per service+type that auto-provisioning should create for a paid
+    /// entity with no subscription yet - explicit rather than inferring "free" from
+    /// <see cref="Price"/> == 0, since a future zero-price promo tariff wouldn't be this one.
+    /// </summary>
+    public required bool IsFree { get; set; }
+
     public required TariffType Type { get; set; }
 }
 
