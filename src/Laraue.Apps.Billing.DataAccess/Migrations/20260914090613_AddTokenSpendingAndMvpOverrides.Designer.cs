@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Laraue.Apps.Billing.DataAccess.Migrations
 {
     [DbContext(typeof(DatabaseContext))]
-    [Migration("20260912211919_RequireTokenTransactionOnPurchasedSpend")]
-    partial class RequireTokenTransactionOnPurchasedSpend
+    [Migration("20260914090613_AddTokenSpendingAndMvpOverrides")]
+    partial class AddTokenSpendingAndMvpOverrides
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -263,6 +263,9 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                     b.HasIndex("TokenPackId")
                         .HasDatabaseName("ix_purchased_token_packs_token_pack_id");
 
+                    b.HasIndex("PaidEntityId", "ExpiredAt")
+                        .HasDatabaseName("ix_purchased_token_packs_paid_entity_id_expired_at");
+
                     b.ToTable("purchased_token_packs", (string)null);
                 });
 
@@ -346,11 +349,11 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                     b.HasKey("Id")
                         .HasName("pk_subscriptions");
 
-                    b.HasIndex("ServiceId")
-                        .HasDatabaseName("ix_subscriptions_service_id");
-
                     b.HasIndex("TariffId")
                         .HasDatabaseName("ix_subscriptions_tariff_id");
+
+                    b.HasIndex("ServiceId", "PaidEntityId")
+                        .HasDatabaseName("ix_subscriptions_service_id_paid_entity_id");
 
                     b.ToTable("subscriptions", (string)null);
                 });
