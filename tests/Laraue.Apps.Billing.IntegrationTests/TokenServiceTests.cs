@@ -39,14 +39,14 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
     }
 
     [Fact]
-    public async Task TryReserveTokensAsync_ShouldReserveFromSubscriptionFirst_WhenBothBalancesAvailable()
+    public async Task TryReservePersonalTokensAsync_ShouldReserveFromSubscriptionFirst_WhenBothBalancesAvailable()
     {
         var paidEntityId = Guid.NewGuid();
         await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 1000, subscriptionTokens: 500);
         await SeedPurchasedPackAsync(paidEntityId, SmallPackId, DateTime.UtcNow.AddDays(30));
         await SetPurchasedBalanceAsync(paidEntityId, 100_000);
 
-        var result = await _tokenService.TryReserveTokensAsync(
+        var result = await _tokenService.TryReservePersonalTokensAsync(
             ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None);
 
         Assert.Null(result.Error);
@@ -67,7 +67,7 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
     }
 
     [Fact]
-    public async Task TryReserveTokensAsync_ShouldDrawPurchasedPacksBySoonestExpiry_WhenSubscriptionInsufficient()
+    public async Task TryReservePersonalTokensAsync_ShouldDrawPurchasedPacksBySoonestExpiry_WhenSubscriptionInsufficient()
     {
         var paidEntityId = Guid.NewGuid();
         await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 50, subscriptionTokens: 50);
@@ -75,7 +75,7 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
         await SeedPurchasedPackAsync(paidEntityId, SmallPackId, DateTime.UtcNow.AddDays(10));
         await SetPurchasedBalanceAsync(paidEntityId, 700_000);
 
-        var result = await _tokenService.TryReserveTokensAsync(
+        var result = await _tokenService.TryReservePersonalTokensAsync(
             ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 1000, CancellationToken.None);
 
         Assert.Null(result.Error);
@@ -94,11 +94,11 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
     }
 
     [Fact]
-    public async Task TryReserveTokensAsync_ShouldReturnError_WhenBalanceInsufficient()
+    public async Task TryReservePersonalTokensAsync_ShouldReturnError_WhenBalanceInsufficient()
     {
         var paidEntityId = Guid.NewGuid();
 
-        var result = await _tokenService.TryReserveTokensAsync(
+        var result = await _tokenService.TryReservePersonalTokensAsync(
             ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 100, CancellationToken.None);
 
         Assert.Null(result.TokenTransactionId);
@@ -107,7 +107,7 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
     }
 
     [Fact]
-    public async Task TryReserveTokensAsync_ShouldNotDoubleSpend_WhenTwoReservationsRunConcurrently()
+    public async Task TryReservePersonalTokensAsync_ShouldNotDoubleSpend_WhenTwoReservationsRunConcurrently()
     {
         var paidEntityId = Guid.NewGuid();
         await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 1000, subscriptionTokens: 0);
@@ -123,9 +123,9 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
             otherContext, new SubscriptionService(otherContext, otherDateTimeProvider), otherDateTimeProvider);
 
         var results = await Task.WhenAll(
-            _tokenService.TryReserveTokensAsync(
+            _tokenService.TryReservePersonalTokensAsync(
                 ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 550, CancellationToken.None),
-            otherTokenService.TryReserveTokensAsync(
+            otherTokenService.TryReservePersonalTokensAsync(
                 ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 550, CancellationToken.None));
 
         Assert.Single(results, r => r.Error is null);
@@ -141,7 +141,7 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
         var paidEntityId = Guid.NewGuid();
         await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 1000, subscriptionTokens: 0);
 
-        var result = await _tokenService.TryReserveTokensAsync(
+        var result = await _tokenService.TryReservePersonalTokensAsync(
             ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 900, CancellationToken.None);
 
         await _tokenService.CommitTokensSpentAsync(result.TokenTransactionId!.Value, actualOutputTokensCount: 100, CancellationToken.None);
@@ -161,7 +161,7 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
         var paidEntityId = Guid.NewGuid();
         await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 500, subscriptionTokens: 0);
 
-        var result = await _tokenService.TryReserveTokensAsync(
+        var result = await _tokenService.TryReservePersonalTokensAsync(
             ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 400, CancellationToken.None);
 
         await _tokenService.CommitTokensSpentAsync(result.TokenTransactionId!.Value, actualOutputTokensCount: 400, CancellationToken.None);
@@ -180,7 +180,7 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
         var paidEntityId = Guid.NewGuid();
         await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 300, subscriptionTokens: 0);
 
-        var result = await _tokenService.TryReserveTokensAsync(
+        var result = await _tokenService.TryReservePersonalTokensAsync(
             ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 50, maxOutputTokensCount: 250, CancellationToken.None);
 
         await _tokenService.CancelTokensReservationAsync(result.TokenTransactionId!.Value, "timeout", CancellationToken.None);
@@ -208,7 +208,7 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
         var paidEntityId = Guid.NewGuid();
         await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 100, subscriptionTokens: 0);
 
-        var result = await _tokenService.TryReserveTokensAsync(
+        var result = await _tokenService.TryReservePersonalTokensAsync(
             ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 10, maxOutputTokensCount: 10, CancellationToken.None);
         await _tokenService.CommitTokensSpentAsync(result.TokenTransactionId!.Value, actualOutputTokensCount: 10, CancellationToken.None);
 

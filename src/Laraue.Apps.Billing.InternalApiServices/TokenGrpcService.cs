@@ -19,17 +19,36 @@ namespace Laraue.Apps.Billing.InternalApiServices;
 public sealed class TokenGrpcService(ITokenService tokenService)
     : ContractsTokenService.TokenServiceBase
 {
-    public override async Task<Internal.Contracts.ReserveTokensResponse> ReserveTokens(
-        Internal.Contracts.ReserveTokensRequest request,
+    public override async Task<Internal.Contracts.ReserveTokensResponse> ReservePersonalTokens(
+        Internal.Contracts.ReservePersonalTokensRequest request,
         ServerCallContext context)
     {
-        var result = await tokenService.TryReserveTokensAsync(
+        var result = await tokenService.TryReservePersonalTokensAsync(
             GrpcParsing.ReadDomainServiceId(context),
-            GrpcParsing.ParseGuid(request.PaidEntityId, nameof(request.PaidEntityId)),
+            GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
             request.InputTokensCount,
             request.MaxOutputTokensCount,
             context.CancellationToken);
 
+        return ToResponse(result);
+    }
+
+    public override async Task<Internal.Contracts.ReserveTokensResponse> ReserveOrganizationTokens(
+        Internal.Contracts.ReserveOrganizationTokensRequest request,
+        ServerCallContext context)
+    {
+        var result = await tokenService.TryReserveOrganizationTokensAsync(
+            GrpcParsing.ReadDomainServiceId(context),
+            GrpcParsing.ParseGuid(request.OrganizationId, nameof(request.OrganizationId)),
+            request.InputTokensCount,
+            request.MaxOutputTokensCount,
+            context.CancellationToken);
+
+        return ToResponse(result);
+    }
+
+    private static Internal.Contracts.ReserveTokensResponse ToResponse(ReservationResult result)
+    {
         if (result.Error is { } error)
         {
             throw new RpcException(new Status(StatusCode.FailedPrecondition, error));
