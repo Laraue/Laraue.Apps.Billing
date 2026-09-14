@@ -43,7 +43,8 @@ public sealed class Program
 
         builder.Services
             .AddGrpc()
-            .AddLaraueGrpcTelemetry();
+            .AddLaraueGrpcTelemetry()
+            .AddLaraueGrpcExceptionHandling();
 
         builder.Services.AddLaraueGrpcTelemetry(
             configureMetrics: metrics => metrics
@@ -62,6 +63,7 @@ public sealed class Program
         }
 
         app.MapGrpcService<SubscriptionGrpcService>();
+        app.MapGrpcService<TokenGrpcService>();
         app.MapHealthChecks("/_health");
         app.MapPrometheusScrapingEndpoint("/_metrics");
 

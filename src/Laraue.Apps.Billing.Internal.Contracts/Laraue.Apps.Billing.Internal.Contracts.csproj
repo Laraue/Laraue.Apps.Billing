@@ -15,6 +15,7 @@
 
     <ItemGroup>
         <Protobuf Include="Protos\subscription.proto" GrpcServices="Both" />
+        <Protobuf Include="Protos\token.proto" GrpcServices="Both" />
     </ItemGroup>
 
 </Project>

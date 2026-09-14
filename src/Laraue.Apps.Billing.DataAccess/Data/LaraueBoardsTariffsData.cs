@@ -11,6 +11,11 @@ public static class LaraueBoardsTariffsData
     private static readonly Guid TeamId = new("89111f8d-292b-4f04-8766-b521e19e6964");
     private static readonly Guid TeamBusinessId = new("bb78563f-631c-4f96-afdd-c35ab02b077e");
 
+    // Paid tariffs aren't purchasable yet (no checkout flow exists), so Free is the only tariff
+    // anyone actually gets. The columns below stay the real, advertised Free-tier limits (always
+    // what the public pricing page shows) - the elevated MVP-stage ceiling that's actually enforced
+    // lives on the separate *MvpOverride columns instead, so ending MVP later is just nulling those
+    // out, with nothing to re-type or forget.
     private static readonly TariffSeed<LaraueBoardsPersonalTariff> PersonalFree =
         new(
             new Tariff
@@ -19,6 +24,7 @@ public static class LaraueBoardsTariffsData
                 Title = "Free",
                 Id = PersonalFreeId,
                 IncludedTokensCount = 0,
+                IncludedTokensCountMvpOverride = 2_500_000,
                 IsActive = true,
                 Price = 0,
                 Type = TariffType.Personal,
@@ -27,7 +33,9 @@ public static class LaraueBoardsTariffsData
             {
                 Id = PersonalFreeId,
                 LimitFreeTeamOrganizationsCount = 1,
+                LimitFreeTeamOrganizationsCountMvpOverride = 1000,
                 LimitIssuesPerMonth = 500,
+                LimitIssuesPerMonthMvpOverride = 200_000,
             });
 
     private static readonly TariffSeed<LaraueBoardsPersonalTariff> PersonalPlus =
@@ -49,6 +57,7 @@ public static class LaraueBoardsTariffsData
                 LimitIssuesPerMonth = 50_000,
             });
 
+    // See the comment on PersonalFree above - same MVP-stage reasoning applies here.
     private static readonly TariffSeed<LaraueBoardsTeamTariff> TeamFree =
         new(
             new Tariff
@@ -57,6 +66,7 @@ public static class LaraueBoardsTariffsData
                 Title = "Free",
                 Id = TeamFreeId,
                 IncludedTokensCount = 0,
+                IncludedTokensCountMvpOverride = 2_500_000,
                 IsActive = true,
                 Price = 0,
                 Type = TariffType.Team,
@@ -65,6 +75,7 @@ public static class LaraueBoardsTariffsData
             {
                 Id = TeamFreeId,
                 LimitIssuesPerMonth = 500,
+                LimitIssuesPerMonthMvpOverride = 200_000,
             });
 
     private static readonly TariffSeed<LaraueBoardsTeamTariff> Team =

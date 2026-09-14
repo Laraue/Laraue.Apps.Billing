@@ -97,5 +97,16 @@ public class DatabaseContext : DbContext
         {
             builder.HasKey(x => x.SubscriptionId);
         });
+
+        // Every reserve/commit/cancel call and gRPC subscription lookup filters on exactly this
+        // pair (GetActiveSubscriptionsQuery) - without it, only the individual service_id/tariff_id
+        // FK indexes exist, forcing a sequential scan on this hot path as the table grows.
+        modelBuilder.Entity<Subscription>()
+            .HasIndex(x => new { x.ServiceId, x.PaidEntityId });
+
+        // TryReserveTokensAsync filters PaidEntityId == x && ExpiredAt > now, then orders by
+        // ExpiredAt, on every reservation - this table had no index on PaidEntityId at all.
+        modelBuilder.Entity<PurchasedTokenPack>()
+            .HasIndex(x => new { x.PaidEntityId, x.ExpiredAt });
     }
 }

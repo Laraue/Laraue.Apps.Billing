@@ -1,11 +1,8 @@
 using Grpc.Core;
 using Laraue.Apps.Billing.Services;
-using Laraue.Core.Exceptions.Web;
 // The generated proto service is also called `SubscriptionService`, colliding with the business
 // logic class of the same name in Laraue.Apps.Billing.Services - alias it to keep both usable here.
 using ContractsSubscriptionService = Laraue.Apps.Billing.Internal.Contracts.SubscriptionService;
-using ContractsServiceId = Laraue.Apps.Billing.Internal.Contracts.ServiceId;
-using DomainServiceId = Laraue.Apps.Billing.DataAccess.Entities.ServiceId;
 
 namespace Laraue.Apps.Billing.InternalApiServices;
 
@@ -14,6 +11,10 @@ namespace Laraue.Apps.Billing.InternalApiServices;
 /// contract (<c>Laraue.Apps.Billing.Internal.Contracts</c>, string ids, a polymorphic
 /// <c>oneof</c> response) and the DB-backed business logic (<c>Guid</c> ids, an
 /// <see cref="ActiveSubscription"/> record hierarchy). No business logic of its own.
+/// <see cref="Laraue.Core.Exceptions.Web.BadRequestException"/> (an unknown <c>ServiceId</c> or
+/// currency) isn't caught here - <c>Laraue.Grpc.Server</c>'s <c>ExceptionTranslationInterceptor</c>
+/// (registered via <c>AddLaraueGrpcExceptionHandling()</c> in <c>Program.cs</c>) translates it into
+/// <see cref="StatusCode.InvalidArgument"/> globally.
 /// </summary>
 public sealed class SubscriptionGrpcService(ISubscriptionService subscriptionService)
     : ContractsSubscriptionService.SubscriptionServiceBase
@@ -24,8 +25,8 @@ public sealed class SubscriptionGrpcService(ISubscriptionService subscriptionSer
     {
         var subscription = await GetSubscriptionOrThrowAsync(() => subscriptionService
             .GetActivePersonalSubscriptionAsync(
-                ToDomainServiceId(request.ServiceId),
-                ParseGuid(request.UserId, nameof(request.UserId)),
+                GrpcParsing.ToDomainServiceId(request.ServiceId),
+                GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
                 context.CancellationToken));
 
         return ToResponse(subscription);
@@ -37,8 +38,8 @@ public sealed class SubscriptionGrpcService(ISubscriptionService subscriptionSer
     {
         var subscription = await GetSubscriptionOrThrowAsync(() => subscriptionService
             .GetActiveOrganizationSubscriptionAsync(
-                ToDomainServiceId(request.ServiceId),
-                ParseGuid(request.OrganizationId, nameof(request.OrganizationId)),
+                GrpcParsing.ToDomainServiceId(request.ServiceId),
+                GrpcParsing.ParseGuid(request.OrganizationId, nameof(request.OrganizationId)),
                 context.CancellationToken));
 
         return ToResponse(subscription);
@@ -49,16 +50,7 @@ public sealed class SubscriptionGrpcService(ISubscriptionService subscriptionSer
     private static async Task<ActiveSubscription> GetSubscriptionOrThrowAsync(
         Func<Task<ActiveSubscription?>> getSubscription)
     {
-        ActiveSubscription? subscription;
-
-        try
-        {
-            subscription = await getSubscription();
-        }
-        catch (BadRequestException ex)
-        {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, ex.Message));
-        }
+        var subscription = await getSubscription();
 
         return subscription ?? throw new RpcException(new Status(StatusCode.NotFound, "No active subscription."));
     }
@@ -95,16 +87,4 @@ public sealed class SubscriptionGrpcService(ISubscriptionService subscriptionSer
 
         return response;
     }
-
-    private static DomainServiceId ToDomainServiceId(ContractsServiceId serviceId) => serviceId switch
-    {
-        ContractsServiceId.LaraueBoards => DomainServiceId.LaraueBoards,
-        ContractsServiceId.MarkdownTranslator => DomainServiceId.MarkdownTranslator,
-        _ => throw new RpcException(new Status(StatusCode.InvalidArgument, $"Unknown service '{serviceId}'.")),
-    };
-
-    private static Guid ParseGuid(string value, string fieldName) =>
-        Guid.TryParse(value, out var guid)
-            ? guid
-            : throw new RpcException(new Status(StatusCode.InvalidArgument, $"'{fieldName}' is not a valid GUID."));
 }

@@ -6,6 +6,7 @@ using Laraue.Core.Exceptions.Web;
 
 namespace Laraue.Apps.Billing.IntegrationTests;
 
+[Collection("IntegrationTest")]
 public class TariffsControllerTests(WebApiTestHost host) : IClassFixture<WebApiTestHost>
 {
     [Theory]

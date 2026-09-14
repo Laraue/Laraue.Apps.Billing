@@ -24,4 +24,13 @@
     <data name="UnknownService" xml:space="preserve">
         <value>Unknown service '{0}'.</value>
     </data>
+    <data name="InsufficientTokenBalance" xml:space="preserve">
+        <value>Insufficient token balance.</value>
+    </data>
+    <data name="TokenTransactionNotFound" xml:space="preserve">
+        <value>Token transaction '{0}' was not found.</value>
+    </data>
+    <data name="TokenTransactionNotStarted" xml:space="preserve">
+        <value>Token transaction '{0}' is not in a startable state (current status: '{1}').</value>
+    </data>
 </root>
