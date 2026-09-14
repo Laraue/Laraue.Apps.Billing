@@ -1,6 +1,5 @@
 using Grpc.Core;
 using Laraue.Apps.Billing.Services;
-using Laraue.Core.Exceptions.Web;
 // The generated proto service is also called `TokenService`, colliding with the business logic
 // class of the same name in Laraue.Apps.Billing.Services - alias it to keep both usable here.
 using ContractsTokenService = Laraue.Apps.Billing.Internal.Contracts.TokenService;
@@ -11,6 +10,11 @@ namespace Laraue.Apps.Billing.InternalApiServices;
 /// gRPC-facing adapter over <see cref="ITokenService"/>: translates between the wire contract
 /// (<c>Laraue.Apps.Billing.Internal.Contracts</c>, string ids) and the DB-backed business logic
 /// (<c>Guid</c> ids, a <see cref="ReservationResult"/> record). No business logic of its own.
+/// <see cref="Laraue.Core.Exceptions.Web.NotFoundException"/>/<see cref="Laraue.Core.Exceptions.Web.BadRequestException"/>
+/// thrown by <see cref="ITokenService"/> (an unknown or already-finalized token_transaction_id)
+/// aren't caught here - <c>Laraue.Grpc.Server</c>'s <c>ExceptionTranslationInterceptor</c>
+/// (registered via <c>AddLaraueGrpcExceptionHandling()</c> in <c>Program.cs</c>) translates them
+/// into <see cref="StatusCode.NotFound"/>/<see cref="StatusCode.InvalidArgument"/> globally.
 /// </summary>
 public sealed class TokenGrpcService(ITokenService tokenService)
     : ContractsTokenService.TokenServiceBase
@@ -41,10 +45,10 @@ public sealed class TokenGrpcService(ITokenService tokenService)
         Internal.Contracts.CommitTokensSpentRequest request,
         ServerCallContext context)
     {
-        await RunOrThrowAsync(() => tokenService.CommitTokensSpentAsync(
+        await tokenService.CommitTokensSpentAsync(
             GrpcParsing.ParseGuid(request.TokenTransactionId, nameof(request.TokenTransactionId)),
             request.ActualOutputTokensCount,
-            context.CancellationToken));
+            context.CancellationToken);
 
         return new Internal.Contracts.CommitTokensSpentResponse();
     }
@@ -53,30 +57,11 @@ public sealed class TokenGrpcService(ITokenService tokenService)
         Internal.Contracts.CancelTokensReservationRequest request,
         ServerCallContext context)
     {
-        await RunOrThrowAsync(() => tokenService.CancelTokensReservationAsync(
+        await tokenService.CancelTokensReservationAsync(
             GrpcParsing.ParseGuid(request.TokenTransactionId, nameof(request.TokenTransactionId)),
             request.Error,
-            context.CancellationToken));
+            context.CancellationToken);
 
         return new Internal.Contracts.CancelTokensReservationResponse();
-    }
-
-    /// <summary>Unknown/non-startable token_transaction_id is reported as
-    /// <see cref="StatusCode.NotFound"/>/<see cref="StatusCode.FailedPrecondition"/> respectively -
-    /// see the error-convention note in token.proto.</summary>
-    private static async Task RunOrThrowAsync(Func<Task> action)
-    {
-        try
-        {
-            await action();
-        }
-        catch (NotFoundException ex)
-        {
-            throw new RpcException(new Status(StatusCode.NotFound, ex.Message));
-        }
-        catch (BadRequestException ex)
-        {
-            throw new RpcException(new Status(StatusCode.FailedPrecondition, ex.Message));
-        }
     }
 }

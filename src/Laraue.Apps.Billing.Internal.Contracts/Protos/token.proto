@@ -8,7 +8,8 @@ package laraue.apps.billing.internal.v1;
 // max output tokens), then either commits the actual amount spent or cancels the reservation
 // outright if the operation never ran. See ReserveTokens/CommitTokensSpent/CancelTokensReservation
 // below for the exact flow. Insufficient balance on ReserveTokens is FAILED_PRECONDITION, not a
-// response variant; an unknown token_transaction_id on Commit/Cancel is NOT_FOUND.
+// response variant; an unknown token_transaction_id on Commit/Cancel is NOT_FOUND, and one that's
+// already been committed/cancelled is INVALID_ARGUMENT.
 //
 // Which service is calling is identified once per client via the "x-laraue-service-id" metadata
 // header (see GrpcHeaders.ServiceIdHeaderName in this package, value = the numeric ServiceId

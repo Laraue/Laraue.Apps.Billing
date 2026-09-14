@@ -43,7 +43,8 @@ public sealed class Program
 
         builder.Services
             .AddGrpc()
-            .AddLaraueGrpcTelemetry();
+            .AddLaraueGrpcTelemetry()
+            .AddLaraueGrpcExceptionHandling();
 
         builder.Services.AddLaraueGrpcTelemetry(
             configureMetrics: metrics => metrics

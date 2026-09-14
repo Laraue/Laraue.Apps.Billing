@@ -28,7 +28,7 @@
     <GrpcAspNetCoreServerVersion>2.66.0</GrpcAspNetCoreServerVersion>
     <GrpcToolsVersion>2.66.0</GrpcToolsVersion>
     <GoogleProtobufVersion>3.28.3</GoogleProtobufVersion>
-    <LaraueGrpcVersion>0.0.1</LaraueGrpcVersion>
+    <LaraueGrpcVersion>0.0.2</LaraueGrpcVersion>
     <OpenTelemetryExtensionsHostingVersion>1.18.0</OpenTelemetryExtensionsHostingVersion>
     <OpenTelemetryExporterPrometheusAspNetCoreVersion>1.18.0-beta.1</OpenTelemetryExporterPrometheusAspNetCoreVersion>
     <OpenTelemetryInstrumentationAspNetCoreVersion>1.18.0</OpenTelemetryInstrumentationAspNetCoreVersion>
