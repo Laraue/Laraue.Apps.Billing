@@ -87,7 +87,7 @@ public class TokenService(
         CancellationToken cancellationToken)
         => TryReserveTokensCoreAsync(
             userId,
-            ct => subscriptionService.GetActiveSubscriptionIdAsync(serviceId, userId, ct),
+            ct => subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(serviceId, userId, ct),
             inputTokensCount,
             maxOutputTokensCount,
             cancellationToken);
@@ -100,20 +100,22 @@ public class TokenService(
         CancellationToken cancellationToken)
         => TryReserveTokensCoreAsync(
             organizationId,
-            ct => subscriptionService.GetActiveSubscriptionIdAsync(serviceId, organizationId, ct),
+            ct => subscriptionService.GetOrCreateActiveOrganizationSubscriptionIdAsync(serviceId, organizationId, ct),
             inputTokensCount,
             maxOutputTokensCount,
             cancellationToken);
 
     /// <summary>
     /// Shared by <see cref="TryReservePersonalTokensAsync"/>/<see cref="TryReserveOrganizationTokensAsync"/>
-    /// - only how <paramref name="resolveSubscriptionIdAsync"/> looks up (and, from Phase 2 Step 4
-    /// on, auto-provisions) the active subscription differs between the two; everything else about
-    /// spending tokens is identical regardless of personal vs. organization.
+    /// - only how <paramref name="resolveSubscriptionIdAsync"/> looks up (and auto-provisions) the
+    /// active subscription differs between the two; everything else about spending tokens is
+    /// identical regardless of personal vs. organization. <paramref name="resolveSubscriptionIdAsync"/>
+    /// always provisions a Free subscription if none exists yet, so unlike before Phase 2 there's
+    /// no "no subscription at all" case left to handle here - only "not enough tokens on it".
     /// </summary>
     private async Task<ReservationResult> TryReserveTokensCoreAsync(
         Guid paidEntityId,
-        Func<CancellationToken, Task<Guid?>> resolveSubscriptionIdAsync,
+        Func<CancellationToken, Task<Guid>> resolveSubscriptionIdAsync,
         int inputTokensCount,
         int maxOutputTokensCount,
         CancellationToken cancellationToken)
@@ -131,14 +133,10 @@ public class TokenService(
 
         var subscriptionId = await resolveSubscriptionIdAsync(cancellationToken);
 
-        var subscriptionBalance = subscriptionId is null
-            ? null
-            : await context.BalanceSubscriptionTokens
-                .SingleOrDefaultAsync(b => b.SubscriptionId == subscriptionId, cancellationToken);
+        var subscriptionBalance = await context.BalanceSubscriptionTokens
+            .SingleAsync(b => b.SubscriptionId == subscriptionId, cancellationToken);
 
-        var subscriptionAvailable = subscriptionBalance is null
-            ? 0L
-            : subscriptionBalance.FreeTokensCount + subscriptionBalance.SubscriptionTokensCount;
+        var subscriptionAvailable = subscriptionBalance.FreeTokensCount + subscriptionBalance.SubscriptionTokensCount;
 
         // Remaining balance per purchased pack isn't stored directly - it's derived as the
         // pack's original grant minus whatever's already been charged against it across the
@@ -166,10 +164,10 @@ public class TokenService(
         var remaining = requested;
         TokenTransactionSubscriptionTokenPack? subscriptionSpend = null;
 
-        if (subscriptionId is not null && subscriptionAvailable > 0)
+        if (subscriptionAvailable > 0)
         {
             var fromSubscription = Math.Min(remaining, subscriptionAvailable);
-            var fromFree = Math.Min(fromSubscription, subscriptionBalance!.FreeTokensCount);
+            var fromFree = Math.Min(fromSubscription, subscriptionBalance.FreeTokensCount);
             var fromPaid = fromSubscription - fromFree;
 
             subscriptionBalance.FreeTokensCount -= fromFree;
@@ -179,7 +177,7 @@ public class TokenService(
             subscriptionSpend = new TokenTransactionSubscriptionTokenPack
             {
                 Id = Guid.NewGuid(),
-                SubscriptionId = subscriptionId.Value,
+                SubscriptionId = subscriptionId,
                 ChargedFreeAmount = fromFree,
                 ChargedAmount = fromPaid,
             };

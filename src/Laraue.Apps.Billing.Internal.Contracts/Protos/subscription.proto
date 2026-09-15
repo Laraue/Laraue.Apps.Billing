@@ -3,11 +3,13 @@ syntax = "proto3";
 option csharp_namespace = "Laraue.Apps.Billing.Internal.Contracts";
 package laraue.apps.billing.internal.v1;
 
-// Service-to-service contract other Laraue apps call directly to check whether a user/organization
-// has an active paid subscription for them, and if so, with which limits (tariffs differ per
-// calling service - see LaraueBoardsPersonalSubscription/LaraueBoardsTeamSubscription/
-// MarkdownTranslatorSubscription). Returns NOT_FOUND (not a response variant) when there's no
-// active subscription.
+// Service-to-service contract other Laraue apps call directly to get a user/organization's active
+// subscription and its limits (tariffs differ per calling service - see
+// LaraueBoardsPersonalSubscription/LaraueBoardsTeamSubscription/MarkdownTranslatorSubscription).
+// There's no "no active subscription" outcome to handle - a paid entity with none yet is
+// auto-provisioned onto the service's Free tariff on first call, so both rpcs below always return
+// a real subscription (or INVALID_ARGUMENT for an unsupported ServiceId/personal-vs-organization
+// combination, e.g. MarkdownTranslator has no team tariffs).
 service SubscriptionService {
   rpc GetActivePersonalSubscription (GetActivePersonalSubscriptionRequest) returns (ActiveSubscriptionResponse);
   rpc GetActiveOrganizationSubscription (GetActiveOrganizationSubscriptionRequest) returns (ActiveSubscriptionResponse);

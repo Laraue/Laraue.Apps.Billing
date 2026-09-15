@@ -98,12 +98,15 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
     {
         var paidEntityId = Guid.NewGuid();
 
+        // A brand-new paidEntityId now auto-provisions onto Free (2,500,000 tokens granted) on
+        // first touch, so a request has to exceed even that grant to legitimately be insufficient.
         var result = await _tokenService.TryReservePersonalTokensAsync(
-            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 100, CancellationToken.None);
+            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 2_000_000, maxOutputTokensCount: 2_000_000, CancellationToken.None);
 
         Assert.Null(result.TokenTransactionId);
         Assert.NotNull(result.Error);
-        Assert.False(await _context.TokenTransactions.AnyAsync(t => t.PaidEntityId == paidEntityId));
+        Assert.False(await _context.TokenTransactions.AnyAsync(
+            t => t.PaidEntityId == paidEntityId && t.Reason == TokenTransactionReason.Spend));
     }
 
     [Fact]
@@ -133,6 +136,46 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
 
         var subscriptionBalance = await _context.BalanceSubscriptionTokens.SingleAsync();
         Assert.Equal(350, subscriptionBalance.FreeTokensCount);
+    }
+
+    [Fact]
+    public async Task TryReservePersonalTokensAsync_ShouldAutoProvisionFreeSubscription_WhenNoneExistsYet()
+    {
+        var userId = Guid.NewGuid();
+
+        var result = await _tokenService.TryReservePersonalTokensAsync(
+            ServiceId.LaraueBoards, userId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None);
+
+        Assert.Null(result.Error);
+        Assert.NotNull(result.TokenTransactionId);
+
+        var subscription = await _context.Subscriptions.SingleAsync(s => s.PaidEntityId == userId);
+        var personalFreeTariffId = await _context.LaraueBoardsPersonalTariffs
+            .Where(t => t.Tariff!.IsFree)
+            .Select(t => t.Id)
+            .SingleAsync();
+        Assert.Equal(personalFreeTariffId, subscription.TariffId);
+
+        Assert.True(await _context.TokenTransactions.AnyAsync(
+            t => t.PaidEntityId == userId && t.Reason == TokenTransactionReason.TariffGrant));
+    }
+
+    [Fact]
+    public async Task TryReserveOrganizationTokensAsync_ShouldProvisionTeamFreeTariff_WhenNoneExistsYet()
+    {
+        var organizationId = Guid.NewGuid();
+
+        var result = await _tokenService.TryReserveOrganizationTokensAsync(
+            ServiceId.LaraueBoards, organizationId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None);
+
+        Assert.Null(result.Error);
+
+        var subscription = await _context.Subscriptions.SingleAsync(s => s.PaidEntityId == organizationId);
+        var teamFreeTariffId = await _context.LaraueBoardsTeamTariffs
+            .Where(t => t.Tariff!.IsFree)
+            .Select(t => t.Id)
+            .SingleAsync();
+        Assert.Equal(teamFreeTariffId, subscription.TariffId);
     }
 
     [Fact]

@@ -14,7 +14,9 @@ namespace Laraue.Apps.Billing.InternalApiServices;
 /// <see cref="Laraue.Core.Exceptions.Web.BadRequestException"/> (an unknown <c>ServiceId</c> or
 /// currency) isn't caught here - <c>Laraue.Grpc.Server</c>'s <c>ExceptionTranslationInterceptor</c>
 /// (registered via <c>AddLaraueGrpcExceptionHandling()</c> in <c>Program.cs</c>) translates it into
-/// <see cref="StatusCode.InvalidArgument"/> globally.
+/// <see cref="StatusCode.InvalidArgument"/> globally. There's no "no active subscription" case to
+/// report either - <see cref="ISubscriptionService"/> auto-provisions Free onto a paid entity with
+/// none yet, so both rpcs below always return a real subscription.
 /// </summary>
 public sealed class SubscriptionGrpcService(ISubscriptionService subscriptionService)
     : ContractsSubscriptionService.SubscriptionServiceBase
@@ -23,11 +25,10 @@ public sealed class SubscriptionGrpcService(ISubscriptionService subscriptionSer
         Internal.Contracts.GetActivePersonalSubscriptionRequest request,
         ServerCallContext context)
     {
-        var subscription = await GetSubscriptionOrThrowAsync(() => subscriptionService
-            .GetActivePersonalSubscriptionAsync(
-                GrpcParsing.ToDomainServiceId(request.ServiceId),
-                GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
-                context.CancellationToken));
+        var subscription = await subscriptionService.GetActivePersonalSubscriptionAsync(
+            GrpcParsing.ToDomainServiceId(request.ServiceId),
+            GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
+            context.CancellationToken);
 
         return ToResponse(subscription);
     }
@@ -36,23 +37,12 @@ public sealed class SubscriptionGrpcService(ISubscriptionService subscriptionSer
         Internal.Contracts.GetActiveOrganizationSubscriptionRequest request,
         ServerCallContext context)
     {
-        var subscription = await GetSubscriptionOrThrowAsync(() => subscriptionService
-            .GetActiveOrganizationSubscriptionAsync(
-                GrpcParsing.ToDomainServiceId(request.ServiceId),
-                GrpcParsing.ParseGuid(request.OrganizationId, nameof(request.OrganizationId)),
-                context.CancellationToken));
+        var subscription = await subscriptionService.GetActiveOrganizationSubscriptionAsync(
+            GrpcParsing.ToDomainServiceId(request.ServiceId),
+            GrpcParsing.ParseGuid(request.OrganizationId, nameof(request.OrganizationId)),
+            context.CancellationToken);
 
         return ToResponse(subscription);
-    }
-
-    /// <summary>No active subscription is reported as <see cref="StatusCode.NotFound"/>, not a
-    /// response variant - see the "no subscription" note in subscription.proto.</summary>
-    private static async Task<ActiveSubscription> GetSubscriptionOrThrowAsync(
-        Func<Task<ActiveSubscription?>> getSubscription)
-    {
-        var subscription = await getSubscription();
-
-        return subscription ?? throw new RpcException(new Status(StatusCode.NotFound, "No active subscription."));
     }
 
     private static Internal.Contracts.ActiveSubscriptionResponse ToResponse(ActiveSubscription subscription)
