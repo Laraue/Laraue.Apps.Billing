@@ -49,6 +49,18 @@ jobs:
         path: webapi-host.tar.gz
         retention-days: 7
 
+    - name: Pack Internal API Host
+      if: github.ref == 'refs/heads/main'
+      run: tar -czf internal-api-host.tar.gz -C src/Laraue.Apps.Billing.InternalApiHost/bin/Release/net10.0 .
+
+    - name: Upload Internal API Host artifact
+      if: github.ref == 'refs/heads/main'
+      uses: actions/upload-artifact@v4
+      with:
+        name: internal-api-host
+        path: internal-api-host.tar.gz
+        retention-days: 7
+
   deploy:
     needs: build-and-test
     if: github.ref == 'refs/heads/main'
@@ -63,6 +75,12 @@ jobs:
             remote_dir: /home/laraue/billing-webapi-host
             image: billingwebapihost
             environment: webapi-production
+          - name: Billing Internal API Host
+            artifact: internal-api-host
+            archive: internal-api-host.tar.gz
+            remote_dir: /home/laraue/billing-internal-api-host
+            image: billinginternalapihost
+            environment: internalapi-production
     environment: ${{ matrix.environment }}
     steps:
     - name: Notify deploy started
