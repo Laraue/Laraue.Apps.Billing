@@ -9,28 +9,17 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Laraue.Apps.Billing.IntegrationTests;
 
-[Collection("IntegrationTest")]
-public class SubscriptionServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHost>, IAsyncLifetime
+public class SubscriptionServiceTests : BillingIntegrationTest
 {
-    private IServiceScope _scope = null!;
-    private DatabaseContext _context = null!;
-    private FakeDateTimeProvider _dateTimeProvider = null!;
-    private ISubscriptionService _subscriptionService = null!;
+    private readonly WebApiTestHost _host;
+    private readonly FakeDateTimeProvider _dateTimeProvider;
+    private readonly ISubscriptionService _subscriptionService;
 
-    public Task InitializeAsync()
+    public SubscriptionServiceTests(WebApiTestHost host) : base(host)
     {
-        _scope = host.Services.CreateScope();
-        _context = _scope.ServiceProvider.GetRequiredService<DatabaseContext>();
-        _context.CleanDatabase();
+        _host = host;
         _dateTimeProvider = new FakeDateTimeProvider(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
-        _subscriptionService = new SubscriptionService(_context, _dateTimeProvider);
-        return Task.CompletedTask;
-    }
-
-    public Task DisposeAsync()
-    {
-        _scope.Dispose();
-        return Task.CompletedTask;
+        _subscriptionService = new SubscriptionService(Context, _dateTimeProvider);
     }
 
     [Fact]
@@ -41,14 +30,14 @@ public class SubscriptionServiceTests(WebApiTestHost host) : IClassFixture<WebAp
         var subscriptionId = await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
             ServiceId.LaraueBoards, userId, CancellationToken.None);
 
-        var subscription = await _context.Subscriptions.SingleAsync(s => s.Id == subscriptionId);
+        var subscription = await Context.Subscriptions.SingleAsync(s => s.Id == subscriptionId);
         Assert.Equal(SubscriptionStatus.Active, subscription.Status);
         Assert.Equal(userId, subscription.PaidEntityId);
 
-        var balance = await _context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        var balance = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
         Assert.Equal(2_500_000, balance.SubscriptionTokensCount);
 
-        var grant = await _context.TokenTransactions.SingleAsync(t => t.PaidEntityId == userId);
+        var grant = await Context.TokenTransactions.SingleAsync(t => t.PaidEntityId == userId);
         Assert.Equal(TokenTransactionReason.TariffGrant, grant.Reason);
         Assert.Equal(TokenSpentStatus.Confirmed, grant.Status);
         Assert.Equal(2_500_000, grant.Delta);
@@ -65,8 +54,8 @@ public class SubscriptionServiceTests(WebApiTestHost host) : IClassFixture<WebAp
             ServiceId.LaraueBoards, userId, CancellationToken.None);
 
         Assert.Equal(firstId, secondId);
-        Assert.Equal(1, await _context.Subscriptions.CountAsync(s => s.PaidEntityId == userId));
-        Assert.Equal(1, await _context.TokenTransactions.CountAsync(
+        Assert.Equal(1, await Context.Subscriptions.CountAsync(s => s.PaidEntityId == userId));
+        Assert.Equal(1, await Context.TokenTransactions.CountAsync(
             t => t.PaidEntityId == userId && t.Reason == TokenTransactionReason.TariffGrant));
     }
 
@@ -78,8 +67,8 @@ public class SubscriptionServiceTests(WebApiTestHost host) : IClassFixture<WebAp
         var subscriptionId = await _subscriptionService.GetOrCreateActiveOrganizationSubscriptionIdAsync(
             ServiceId.LaraueBoards, organizationId, CancellationToken.None);
 
-        var subscription = await _context.Subscriptions.SingleAsync(s => s.Id == subscriptionId);
-        var teamFreeTariffId = await _context.LaraueBoardsTeamTariffs
+        var subscription = await Context.Subscriptions.SingleAsync(s => s.Id == subscriptionId);
+        var teamFreeTariffId = await Context.LaraueBoardsTeamTariffs
             .Where(t => t.Tariff!.IsFree)
             .Select(t => t.Id)
             .SingleAsync();
@@ -94,20 +83,20 @@ public class SubscriptionServiceTests(WebApiTestHost host) : IClassFixture<WebAp
         var subscriptionId = await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
             ServiceId.MarkdownTranslator, userId, CancellationToken.None);
 
-        var balanceAfterFirstDay = await _context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        var balanceAfterFirstDay = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
         Assert.Equal(10_000, balanceAfterFirstDay.FreeTokensCount);
         Assert.Equal(new DateOnly(2026, 1, 1), balanceAfterFirstDay.LastDailyGrantAt);
 
         // Spend most of today's allowance down, then advance the fake clock a day and re-provision
         // (the same call the reserve/read paths make) - the daily allowance should reset, not add.
         balanceAfterFirstDay.FreeTokensCount = 100;
-        await _context.SaveChangesAsync();
+        await Context.SaveChangesAsync();
         _dateTimeProvider.UtcNow = new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc);
 
         await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
             ServiceId.MarkdownTranslator, userId, CancellationToken.None);
 
-        var balanceAfterSecondDay = await _context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        var balanceAfterSecondDay = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
         Assert.Equal(10_000, balanceAfterSecondDay.FreeTokensCount);
         Assert.Equal(new DateOnly(2026, 1, 2), balanceAfterSecondDay.LastDailyGrantAt);
     }
@@ -120,14 +109,14 @@ public class SubscriptionServiceTests(WebApiTestHost host) : IClassFixture<WebAp
         var subscriptionId = await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
             ServiceId.MarkdownTranslator, userId, CancellationToken.None);
 
-        var balance = await _context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        var balance = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
         balance.FreeTokensCount = 100;
-        await _context.SaveChangesAsync();
+        await Context.SaveChangesAsync();
 
         await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
             ServiceId.MarkdownTranslator, userId, CancellationToken.None);
 
-        var balanceAfter = await _context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        var balanceAfter = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
         Assert.Equal(100, balanceAfter.FreeTokensCount);
     }
 
@@ -136,7 +125,7 @@ public class SubscriptionServiceTests(WebApiTestHost host) : IClassFixture<WebAp
     {
         var userId = Guid.NewGuid();
 
-        using var otherScope = host.Services.CreateScope();
+        using var otherScope = _host.Services.CreateScope();
         var otherContext = otherScope.ServiceProvider.GetRequiredService<DatabaseContext>();
         var otherSubscriptionService = new SubscriptionService(
             otherContext, new FakeDateTimeProvider(_dateTimeProvider.UtcNow));
@@ -149,8 +138,8 @@ public class SubscriptionServiceTests(WebApiTestHost host) : IClassFixture<WebAp
             otherSubscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(ServiceId.LaraueBoards, userId, CancellationToken.None));
 
         Assert.Equal(subscriptionIds[0], subscriptionIds[1]);
-        Assert.Equal(1, await _context.Subscriptions.CountAsync(s => s.PaidEntityId == userId));
-        Assert.Equal(1, await _context.TokenTransactions.CountAsync(
+        Assert.Equal(1, await Context.Subscriptions.CountAsync(s => s.PaidEntityId == userId));
+        Assert.Equal(1, await Context.TokenTransactions.CountAsync(
             t => t.PaidEntityId == userId && t.Reason == TokenTransactionReason.TariffGrant));
     }
 

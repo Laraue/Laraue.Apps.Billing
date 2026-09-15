@@ -11,31 +11,20 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Laraue.Apps.Billing.IntegrationTests;
 
-[Collection("IntegrationTest")]
-public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHost>, IAsyncLifetime
+public class TokenServiceTests : BillingIntegrationTest
 {
     private static readonly Guid PlusTariffId = LaraueBoardsTariffsData.PersonalTariffs[1].Tariff.Id;
     private static readonly Guid SmallPackId = TokenPacksData.Packs[0].Id;
     private static readonly Guid MediumPackId = TokenPacksData.Packs[1].Id;
 
-    private IServiceScope _scope = null!;
-    private DatabaseContext _context = null!;
-    private ITokenService _tokenService = null!;
+    private readonly WebApiTestHost _host;
+    private readonly ITokenService _tokenService;
 
-    public Task InitializeAsync()
+    public TokenServiceTests(WebApiTestHost host) : base(host)
     {
-        _scope = host.Services.CreateScope();
-        _context = _scope.ServiceProvider.GetRequiredService<DatabaseContext>();
-        _context.CleanDatabase();
+        _host = host;
         var dateTimeProvider = new DateTimeProvider();
-        _tokenService = new TokenService(_context, new SubscriptionService(_context, dateTimeProvider), dateTimeProvider);
-        return Task.CompletedTask;
-    }
-
-    public Task DisposeAsync()
-    {
-        _scope.Dispose();
-        return Task.CompletedTask;
+        _tokenService = new TokenService(Context, new SubscriptionService(Context, dateTimeProvider), dateTimeProvider);
     }
 
     [Fact]
@@ -52,14 +41,14 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
         Assert.Null(result.Error);
         Assert.NotNull(result.TokenTransactionId);
 
-        var subscriptionBalance = await _context.BalanceSubscriptionTokens.SingleAsync();
+        var subscriptionBalance = await Context.BalanceSubscriptionTokens.SingleAsync();
         Assert.Equal(700, subscriptionBalance.FreeTokensCount);
         Assert.Equal(500, subscriptionBalance.SubscriptionTokensCount);
 
-        var purchasedBalance = await _context.BalancePurchasedTokens.SingleAsync();
+        var purchasedBalance = await Context.BalancePurchasedTokens.SingleAsync();
         Assert.Equal(100_000, purchasedBalance.Balance);
 
-        var tokenTransaction = await _context.TokenTransactions.SingleAsync(t => t.Id == result.TokenTransactionId);
+        var tokenTransaction = await Context.TokenTransactions.SingleAsync(t => t.Id == result.TokenTransactionId);
         Assert.Equal(TokenSpentStatus.Started, tokenTransaction.Status);
         Assert.Equal(TokenTransactionReason.Spend, tokenTransaction.Reason);
         Assert.Equal(300, tokenTransaction.ReservedAmount);
@@ -80,16 +69,16 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
 
         Assert.Null(result.Error);
 
-        var subscriptionBalance = await _context.BalanceSubscriptionTokens.SingleAsync();
+        var subscriptionBalance = await Context.BalanceSubscriptionTokens.SingleAsync();
         Assert.Equal(0, subscriptionBalance.FreeTokensCount);
         Assert.Equal(0, subscriptionBalance.SubscriptionTokensCount);
 
-        var purchasedSpend = await _context.TokenTransactionPurchasedTokenPacks.SingleAsync();
+        var purchasedSpend = await Context.TokenTransactionPurchasedTokenPacks.SingleAsync();
         Assert.Equal(soonPackId, purchasedSpend.PurchasedTokenPackId);
         Assert.Equal(1000, purchasedSpend.ChargedAmount);
         Assert.Equal(599_000, purchasedSpend.BalanceAfter);
 
-        var purchasedBalance = await _context.BalancePurchasedTokens.SingleAsync();
+        var purchasedBalance = await Context.BalancePurchasedTokens.SingleAsync();
         Assert.Equal(699_000, purchasedBalance.Balance);
     }
 
@@ -105,7 +94,7 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
 
         Assert.Null(result.TokenTransactionId);
         Assert.NotNull(result.Error);
-        Assert.False(await _context.TokenTransactions.AnyAsync(
+        Assert.False(await Context.TokenTransactions.AnyAsync(
             t => t.PaidEntityId == paidEntityId && t.Reason == TokenTransactionReason.Spend));
     }
 
@@ -119,7 +108,7 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
         // pg_advisory_xact_lock in TokenService, both could read the same pre-decrement balance,
         // both pass the sufficiency check, and the second's UPDATE would silently clobber the
         // first's, leaving the balance at 1000 - 650 = 350 instead of correctly rejecting one.
-        using var otherScope = host.Services.CreateScope();
+        using var otherScope = _host.Services.CreateScope();
         var otherContext = otherScope.ServiceProvider.GetRequiredService<DatabaseContext>();
         var otherDateTimeProvider = new DateTimeProvider();
         var otherTokenService = new TokenService(
@@ -134,7 +123,7 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
         Assert.Single(results, r => r.Error is null);
         Assert.Single(results, r => r.Error is not null);
 
-        var subscriptionBalance = await _context.BalanceSubscriptionTokens.SingleAsync();
+        var subscriptionBalance = await Context.BalanceSubscriptionTokens.SingleAsync();
         Assert.Equal(350, subscriptionBalance.FreeTokensCount);
     }
 
@@ -149,14 +138,14 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
         Assert.Null(result.Error);
         Assert.NotNull(result.TokenTransactionId);
 
-        var subscription = await _context.Subscriptions.SingleAsync(s => s.PaidEntityId == userId);
-        var personalFreeTariffId = await _context.LaraueBoardsPersonalTariffs
+        var subscription = await Context.Subscriptions.SingleAsync(s => s.PaidEntityId == userId);
+        var personalFreeTariffId = await Context.LaraueBoardsPersonalTariffs
             .Where(t => t.Tariff!.IsFree)
             .Select(t => t.Id)
             .SingleAsync();
         Assert.Equal(personalFreeTariffId, subscription.TariffId);
 
-        Assert.True(await _context.TokenTransactions.AnyAsync(
+        Assert.True(await Context.TokenTransactions.AnyAsync(
             t => t.PaidEntityId == userId && t.Reason == TokenTransactionReason.TariffGrant));
     }
 
@@ -170,8 +159,8 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
 
         Assert.Null(result.Error);
 
-        var subscription = await _context.Subscriptions.SingleAsync(s => s.PaidEntityId == organizationId);
-        var teamFreeTariffId = await _context.LaraueBoardsTeamTariffs
+        var subscription = await Context.Subscriptions.SingleAsync(s => s.PaidEntityId == organizationId);
+        var teamFreeTariffId = await Context.LaraueBoardsTeamTariffs
             .Where(t => t.Tariff!.IsFree)
             .Select(t => t.Id)
             .SingleAsync();
@@ -189,10 +178,10 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
 
         await _tokenService.CommitTokensSpentAsync(result.TokenTransactionId!.Value, actualOutputTokensCount: 100, CancellationToken.None);
 
-        var subscriptionBalance = await _context.BalanceSubscriptionTokens.SingleAsync();
+        var subscriptionBalance = await Context.BalanceSubscriptionTokens.SingleAsync();
         Assert.Equal(800, subscriptionBalance.FreeTokensCount);
 
-        var tokenTransaction = await _context.TokenTransactions.SingleAsync(t => t.Id == result.TokenTransactionId);
+        var tokenTransaction = await Context.TokenTransactions.SingleAsync(t => t.Id == result.TokenTransactionId);
         Assert.Equal(TokenSpentStatus.Confirmed, tokenTransaction.Status);
         Assert.Equal(-200, tokenTransaction.Delta);
         Assert.NotNull(tokenTransaction.FinishedAt);
@@ -209,10 +198,10 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
 
         await _tokenService.CommitTokensSpentAsync(result.TokenTransactionId!.Value, actualOutputTokensCount: 400, CancellationToken.None);
 
-        var subscriptionBalance = await _context.BalanceSubscriptionTokens.SingleAsync();
+        var subscriptionBalance = await Context.BalanceSubscriptionTokens.SingleAsync();
         Assert.Equal(0, subscriptionBalance.FreeTokensCount);
 
-        var tokenTransaction = await _context.TokenTransactions.SingleAsync(t => t.Id == result.TokenTransactionId);
+        var tokenTransaction = await Context.TokenTransactions.SingleAsync(t => t.Id == result.TokenTransactionId);
         Assert.Equal(TokenSpentStatus.Confirmed, tokenTransaction.Status);
         Assert.Equal(-500, tokenTransaction.Delta);
     }
@@ -228,10 +217,10 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
 
         await _tokenService.CancelTokensReservationAsync(result.TokenTransactionId!.Value, "timeout", CancellationToken.None);
 
-        var subscriptionBalance = await _context.BalanceSubscriptionTokens.SingleAsync();
+        var subscriptionBalance = await Context.BalanceSubscriptionTokens.SingleAsync();
         Assert.Equal(300, subscriptionBalance.FreeTokensCount);
 
-        var tokenTransaction = await _context.TokenTransactions.SingleAsync(t => t.Id == result.TokenTransactionId);
+        var tokenTransaction = await Context.TokenTransactions.SingleAsync(t => t.Id == result.TokenTransactionId);
         Assert.Equal(TokenSpentStatus.Canceled, tokenTransaction.Status);
         Assert.Equal(0, tokenTransaction.Delta);
         Assert.Equal("timeout", tokenTransaction.Error);
@@ -263,7 +252,7 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
     {
         var subscriptionId = Guid.NewGuid();
 
-        _context.Subscriptions.Add(new Subscription
+        Context.Subscriptions.Add(new Subscription
         {
             Id = subscriptionId,
             ServiceId = ServiceId.LaraueBoards,
@@ -275,14 +264,14 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
             CurrentPeriodFinishesAt = DateTime.UtcNow.AddDays(29),
         });
 
-        _context.BalanceSubscriptionTokens.Add(new BalanceSubscriptionToken
+        Context.BalanceSubscriptionTokens.Add(new BalanceSubscriptionToken
         {
             SubscriptionId = subscriptionId,
             FreeTokensCount = freeTokens,
             SubscriptionTokensCount = subscriptionTokens,
         });
 
-        await _context.SaveChangesAsync();
+        await Context.SaveChangesAsync();
 
         return subscriptionId;
     }
@@ -291,7 +280,7 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
     {
         var packId = Guid.NewGuid();
 
-        _context.PurchasedTokenPacks.Add(new PurchasedTokenPack
+        Context.PurchasedTokenPacks.Add(new PurchasedTokenPack
         {
             Id = packId,
             PaidEntityId = paidEntityId,
@@ -300,23 +289,23 @@ public class TokenServiceTests(WebApiTestHost host) : IClassFixture<WebApiTestHo
             ExpiredAt = expiredAt,
         });
 
-        await _context.SaveChangesAsync();
+        await Context.SaveChangesAsync();
 
         return packId;
     }
 
     private async Task SetPurchasedBalanceAsync(Guid paidEntityId, long balance)
     {
-        var existing = await _context.BalancePurchasedTokens.SingleOrDefaultAsync(b => b.PaidEntityId == paidEntityId);
+        var existing = await Context.BalancePurchasedTokens.SingleOrDefaultAsync(b => b.PaidEntityId == paidEntityId);
         if (existing is null)
         {
-            _context.BalancePurchasedTokens.Add(new BalancePurchasedToken { PaidEntityId = paidEntityId, Balance = balance });
+            Context.BalancePurchasedTokens.Add(new BalancePurchasedToken { PaidEntityId = paidEntityId, Balance = balance });
         }
         else
         {
             existing.Balance = balance;
         }
 
-        await _context.SaveChangesAsync();
+        await Context.SaveChangesAsync();
     }
 }
