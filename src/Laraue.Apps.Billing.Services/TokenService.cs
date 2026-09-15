@@ -22,14 +22,28 @@ public interface ITokenService
 {
     /// <summary>
     /// Reserves up to <paramref name="inputTokensCount"/> + <paramref name="maxOutputTokensCount"/>
-    /// tokens for <paramref name="paidEntityId"/>, drawing from its active subscription balance
-    /// first and its unexpired purchased packs (soonest-expiring first) after that. Returns an
-    /// error instead of throwing when the balance is insufficient - that's an expected outcome,
-    /// not a client error.
+    /// tokens for <paramref name="userId"/>'s personal balance on <paramref name="serviceId"/>,
+    /// drawing from its active subscription balance first and its unexpired purchased packs
+    /// (soonest-expiring first) after that. Returns an error instead of throwing when the balance
+    /// is insufficient - that's an expected outcome, not a client error.
     /// </summary>
-    Task<ReservationResult> TryReserveTokensAsync(
+    Task<ReservationResult> TryReservePersonalTokensAsync(
         ServiceId serviceId,
-        Guid paidEntityId,
+        Guid userId,
+        int inputTokensCount,
+        int maxOutputTokensCount,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Same as <see cref="TryReservePersonalTokensAsync"/>, but against
+    /// <paramref name="organizationId"/>'s team balance instead of a user's personal one - kept
+    /// separate (rather than a personal/organization flag) since this service has no
+    /// User/Organization tables and can't otherwise tell which kind of Free tariff to
+    /// auto-provision for an entity with no subscription yet.
+    /// </summary>
+    Task<ReservationResult> TryReserveOrganizationTokensAsync(
+        ServiceId serviceId,
+        Guid organizationId,
         int inputTokensCount,
         int maxOutputTokensCount,
         CancellationToken cancellationToken);
@@ -65,9 +79,43 @@ public class TokenService(
     ISubscriptionService subscriptionService,
     IDateTimeProvider dateTimeProvider) : ITokenService
 {
-    public async Task<ReservationResult> TryReserveTokensAsync(
+    public Task<ReservationResult> TryReservePersonalTokensAsync(
         ServiceId serviceId,
+        Guid userId,
+        int inputTokensCount,
+        int maxOutputTokensCount,
+        CancellationToken cancellationToken)
+        => TryReserveTokensCoreAsync(
+            userId,
+            ct => subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(serviceId, userId, ct),
+            inputTokensCount,
+            maxOutputTokensCount,
+            cancellationToken);
+
+    public Task<ReservationResult> TryReserveOrganizationTokensAsync(
+        ServiceId serviceId,
+        Guid organizationId,
+        int inputTokensCount,
+        int maxOutputTokensCount,
+        CancellationToken cancellationToken)
+        => TryReserveTokensCoreAsync(
+            organizationId,
+            ct => subscriptionService.GetOrCreateActiveOrganizationSubscriptionIdAsync(serviceId, organizationId, ct),
+            inputTokensCount,
+            maxOutputTokensCount,
+            cancellationToken);
+
+    /// <summary>
+    /// Shared by <see cref="TryReservePersonalTokensAsync"/>/<see cref="TryReserveOrganizationTokensAsync"/>
+    /// - only how <paramref name="resolveSubscriptionIdAsync"/> looks up (and auto-provisions) the
+    /// active subscription differs between the two; everything else about spending tokens is
+    /// identical regardless of personal vs. organization. <paramref name="resolveSubscriptionIdAsync"/>
+    /// always provisions a Free subscription if none exists yet, so unlike before Phase 2 there's
+    /// no "no subscription at all" case left to handle here - only "not enough tokens on it".
+    /// </summary>
+    private async Task<ReservationResult> TryReserveTokensCoreAsync(
         Guid paidEntityId,
+        Func<CancellationToken, Task<Guid>> resolveSubscriptionIdAsync,
         int inputTokensCount,
         int maxOutputTokensCount,
         CancellationToken cancellationToken)
@@ -83,17 +131,12 @@ public class TokenService(
         // token on Balance*Token), leaving the materialized balance higher than it should be.
         await context.Database.PgAdvisoryXactLock(paidEntityId.ToString(), cancellationToken);
 
-        var subscriptionId = await subscriptionService
-            .GetActiveSubscriptionIdAsync(serviceId, paidEntityId, cancellationToken);
+        var subscriptionId = await resolveSubscriptionIdAsync(cancellationToken);
 
-        var subscriptionBalance = subscriptionId is null
-            ? null
-            : await context.BalanceSubscriptionTokens
-                .SingleOrDefaultAsync(b => b.SubscriptionId == subscriptionId, cancellationToken);
+        var subscriptionBalance = await context.BalanceSubscriptionTokens
+            .SingleAsync(b => b.SubscriptionId == subscriptionId, cancellationToken);
 
-        var subscriptionAvailable = subscriptionBalance is null
-            ? 0L
-            : subscriptionBalance.FreeTokensCount + subscriptionBalance.SubscriptionTokensCount;
+        var subscriptionAvailable = subscriptionBalance.FreeTokensCount + subscriptionBalance.SubscriptionTokensCount;
 
         // Remaining balance per purchased pack isn't stored directly - it's derived as the
         // pack's original grant minus whatever's already been charged against it across the
@@ -121,10 +164,10 @@ public class TokenService(
         var remaining = requested;
         TokenTransactionSubscriptionTokenPack? subscriptionSpend = null;
 
-        if (subscriptionId is not null && subscriptionAvailable > 0)
+        if (subscriptionAvailable > 0)
         {
             var fromSubscription = Math.Min(remaining, subscriptionAvailable);
-            var fromFree = Math.Min(fromSubscription, subscriptionBalance!.FreeTokensCount);
+            var fromFree = Math.Min(fromSubscription, subscriptionBalance.FreeTokensCount);
             var fromPaid = fromSubscription - fromFree;
 
             subscriptionBalance.FreeTokensCount -= fromFree;
@@ -134,7 +177,7 @@ public class TokenService(
             subscriptionSpend = new TokenTransactionSubscriptionTokenPack
             {
                 Id = Guid.NewGuid(),
-                SubscriptionId = subscriptionId.Value,
+                SubscriptionId = subscriptionId,
                 ChargedFreeAmount = fromFree,
                 ChargedAmount = fromPaid,
             };
@@ -248,7 +291,7 @@ public class TokenService(
     /// check below, not after finding it - otherwise two concurrent commit/cancel calls for the
     /// same transaction (or one racing a concurrent reservation for the same entity) could both
     /// read <see cref="TokenSpentStatus.Started"/> before either commits and both refund/finalize
-    /// it, the same class of lost-update race <see cref="TryReserveTokensAsync"/> guards against.
+    /// it, the same class of lost-update race <see cref="TryReserveTokensCoreAsync"/> guards against.
     /// </summary>
     private async Task<TokenTransaction> GetStartedTransactionOrThrowAsync(
         Guid tokenTransactionId,
