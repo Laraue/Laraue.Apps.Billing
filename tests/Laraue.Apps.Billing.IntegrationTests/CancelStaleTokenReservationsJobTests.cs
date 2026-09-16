@@ -41,7 +41,7 @@ public class CancelStaleTokenReservationsJobTests : BillingIntegrationTest
         await BackdateTransactionAsync(result.TokenTransactionId!.Value, TimeSpan.FromMinutes(31));
 
         var job = new CancelStaleTokenReservationsJob(Context, _tokenService, _dateTimeProvider, NullLogger<CancelStaleTokenReservationsJob>.Instance);
-        await job.ExecuteAsync(new JobState<EmptyJobData> { JobName = "cancel-stale-token-reservations" }, CancellationToken.None);
+        await job.ExecuteAsync(new JobState<EmptyJobData> { JobName = "CancelStaleTokenReservationsJob" }, CancellationToken.None);
 
         var transaction = await FreshContext().TokenTransactions.SingleAsync(t => t.Id == result.TokenTransactionId);
         Assert.Equal(TokenSpentStatus.Canceled, transaction.Status);
@@ -62,7 +62,7 @@ public class CancelStaleTokenReservationsJobTests : BillingIntegrationTest
         await BackdateTransactionAsync(result.TokenTransactionId!.Value, TimeSpan.FromMinutes(10));
 
         var job = new CancelStaleTokenReservationsJob(Context, _tokenService, _dateTimeProvider, NullLogger<CancelStaleTokenReservationsJob>.Instance);
-        await job.ExecuteAsync(new JobState<EmptyJobData> { JobName = "cancel-stale-token-reservations" }, CancellationToken.None);
+        await job.ExecuteAsync(new JobState<EmptyJobData> { JobName = "CancelStaleTokenReservationsJob" }, CancellationToken.None);
 
         var transaction = await FreshContext().TokenTransactions.SingleAsync(t => t.Id == result.TokenTransactionId);
         Assert.Equal(TokenSpentStatus.Started, transaction.Status);
@@ -93,7 +93,7 @@ public class CancelStaleTokenReservationsJobTests : BillingIntegrationTest
             .Returns((Guid id, string error, CancellationToken ct) => _tokenService.CancelTokensReservationAsync(id, error, ct));
 
         var job = new CancelStaleTokenReservationsJob(Context, tokenServiceMock.Object, _dateTimeProvider, NullLogger<CancelStaleTokenReservationsJob>.Instance);
-        await job.ExecuteAsync(new JobState<EmptyJobData> { JobName = "cancel-stale-token-reservations" }, CancellationToken.None);
+        await job.ExecuteAsync(new JobState<EmptyJobData> { JobName = "CancelStaleTokenReservationsJob" }, CancellationToken.None);
 
         var secondTransaction = await FreshContext().TokenTransactions.SingleAsync(t => t.Id == second.TokenTransactionId);
         Assert.Equal(TokenSpentStatus.Canceled, secondTransaction.Status);
