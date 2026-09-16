@@ -4,6 +4,7 @@ using Laraue.Apps.Billing.Services.Jobs;
 using Laraue.Core.Extensions.Hosting;
 using Laraue.Core.Extensions.Hosting.EfCore;
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Metrics;
 
 namespace Laraue.Apps.Billing.WorkerHost;
 
@@ -41,6 +42,18 @@ public sealed class Program
 
         builder.Services.AddHealthChecks();
 
+        // No gRPC traffic here, so this builds the OpenTelemetry pipeline directly rather than
+        // going through Laraue.Grpc.OpenTelemetry's AddLaraueGrpcTelemetry - that helper always
+        // also subscribes to the "Laraue.Grpc" source/meter, which would be dead weight for a
+        // host that never makes a gRPC call. AddMeter(LaraueJobsTelemetry.SourceName) is what
+        // picks up CancelStaleTokenReservationsJob's own run-count/duration metrics.
+        builder.Services.AddOpenTelemetry()
+            .WithMetrics(metrics => metrics
+                .AddMeter(LaraueJobsTelemetry.SourceName)
+                .AddAspNetCoreInstrumentation()
+                .AddRuntimeInstrumentation()
+                .AddPrometheusExporter());
+
         var app = builder.Build();
 
         using (var scope = app.Services.CreateScope())
@@ -50,6 +63,7 @@ public sealed class Program
         }
 
         app.MapHealthChecks("/_health");
+        app.MapPrometheusScrapingEndpoint("/_metrics");
 
         await app.RunAsync();
     }
