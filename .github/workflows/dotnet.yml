@@ -61,6 +61,18 @@ jobs:
         path: internal-api-host.tar.gz
         retention-days: 7
 
+    - name: Pack Worker Host
+      if: github.ref == 'refs/heads/main'
+      run: tar -czf worker-host.tar.gz -C src/Laraue.Apps.Billing.WorkerHost/bin/Release/net10.0 .
+
+    - name: Upload Worker Host artifact
+      if: github.ref == 'refs/heads/main'
+      uses: actions/upload-artifact@v4
+      with:
+        name: worker-host
+        path: worker-host.tar.gz
+        retention-days: 7
+
   deploy:
     needs: build-and-test
     if: github.ref == 'refs/heads/main'
@@ -81,6 +93,12 @@ jobs:
             remote_dir: /home/laraue/billing-internal-api-host
             image: billinginternalapihost
             environment: internalapi-production
+          - name: Billing Worker Host
+            artifact: worker-host
+            archive: worker-host.tar.gz
+            remote_dir: /home/laraue/billing-worker-host
+            image: billingworkerhost
+            environment: worker-production
     environment: ${{ matrix.environment }}
     steps:
     - name: Notify deploy started

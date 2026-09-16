@@ -1,16 +1,24 @@
 using Laraue.Apps.Billing.DataAccess.Data;
 using Laraue.Apps.Billing.DataAccess.Entities;
+using Laraue.Core.Extensions.Hosting.EfCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Laraue.Apps.Billing.DataAccess;
 
-public class DatabaseContext : DbContext
+public class DatabaseContext : DbContext, IJobsDbContext
 {
-    public DatabaseContext(DbContextOptions options) 
+    public DatabaseContext(DbContextOptions options)
         : base(options)
     {
     }
-    
+
+    /// <summary>
+    /// Backing store for <c>Laraue.Core.Extensions.Hosting</c>'s background job runners (e.g.
+    /// <c>WorkerHost</c>'s stale-reservation reconciliation job) - tracks each job's last/next
+    /// execution time so it survives a process restart.
+    /// </summary>
+    public required DbSet<JobStateEntity> JobStates { get; set; }
+
     #region Tariffs
 
     public required DbSet<Tariff> Tariffs { get; set; }
@@ -37,6 +45,12 @@ public class DatabaseContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // JobStateEntity ships from Laraue.Core.Extensions.Hosting.EfCore with no key convention
+        // of its own - JobName is documented as the "unique job name" on the base JobState record,
+        // so it's the natural primary key.
+        modelBuilder.Entity<JobStateEntity>()
+            .HasKey(x => x.JobName);
+
         modelBuilder.Entity<Service>()
             .HasData(ServicesData.Services);
 
