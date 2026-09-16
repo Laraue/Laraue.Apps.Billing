@@ -22,6 +22,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Laraue.Apps.Billing.Interna
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Laraue.Apps.Billing.WebApiServices", "src\Laraue.Apps.Billing.WebApiServices\Laraue.Apps.Billing.WebApiServices.csproj", "{5D6A0161-3D41-4B72-A66C-2260889C24EA}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "hosts", "hosts", "{2F3EF1A3-B2B0-B28C-122D-FFB85167A4CE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Laraue.Apps.Billing.WorkerHost", "src\Laraue.Apps.Billing.WorkerHost\Laraue.Apps.Billing.WorkerHost.csproj", "{A548D8A7-7291-4153-832F-AD1B7BC1BD0A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -128,6 +132,18 @@ Global
 		{5D6A0161-3D41-4B72-A66C-2260889C24EA}.Release|x64.Build.0 = Release|Any CPU
 		{5D6A0161-3D41-4B72-A66C-2260889C24EA}.Release|x86.ActiveCfg = Release|Any CPU
 		{5D6A0161-3D41-4B72-A66C-2260889C24EA}.Release|x86.Build.0 = Release|Any CPU
+		{A548D8A7-7291-4153-832F-AD1B7BC1BD0A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A548D8A7-7291-4153-832F-AD1B7BC1BD0A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A548D8A7-7291-4153-832F-AD1B7BC1BD0A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A548D8A7-7291-4153-832F-AD1B7BC1BD0A}.Debug|x64.Build.0 = Debug|Any CPU
+		{A548D8A7-7291-4153-832F-AD1B7BC1BD0A}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A548D8A7-7291-4153-832F-AD1B7BC1BD0A}.Debug|x86.Build.0 = Debug|Any CPU
+		{A548D8A7-7291-4153-832F-AD1B7BC1BD0A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A548D8A7-7291-4153-832F-AD1B7BC1BD0A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A548D8A7-7291-4153-832F-AD1B7BC1BD0A}.Release|x64.ActiveCfg = Release|Any CPU
+		{A548D8A7-7291-4153-832F-AD1B7BC1BD0A}.Release|x64.Build.0 = Release|Any CPU
+		{A548D8A7-7291-4153-832F-AD1B7BC1BD0A}.Release|x86.ActiveCfg = Release|Any CPU
+		{A548D8A7-7291-4153-832F-AD1B7BC1BD0A}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -142,5 +158,6 @@ Global
 		{DF3B2E01-95F9-4C31-8D43-E3797EEBC56C} = {5563ACB5-3B77-4AEE-8B67-209330935856}
 		{4AA5183E-0741-4A11-A86D-068D688128C7} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{5D6A0161-3D41-4B72-A66C-2260889C24EA} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{A548D8A7-7291-4153-832F-AD1B7BC1BD0A} = {2F3EF1A3-B2B0-B28C-122D-FFB85167A4CE}
 	EndGlobalSection
 EndGlobal
