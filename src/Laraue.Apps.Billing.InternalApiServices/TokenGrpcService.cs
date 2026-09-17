@@ -1,5 +1,8 @@
+using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
+using Laraue.Apps.Billing.DataAccess.Entities;
 using Laraue.Apps.Billing.Services;
+using Laraue.Core.DataAccess.Contracts;
 // The generated proto service is also called `TokenService`, colliding with the business logic
 // class of the same name in Laraue.Apps.Billing.Services - alias it to keep both usable here.
 using ContractsTokenService = Laraue.Apps.Billing.Internal.Contracts.TokenService;
@@ -83,4 +86,88 @@ public sealed class TokenGrpcService(ITokenService tokenService)
 
         return new Internal.Contracts.CancelTokensReservationResponse();
     }
+
+    public override async Task<Internal.Contracts.TokenBalanceResponse> GetPersonalTokenBalance(
+        Internal.Contracts.GetPersonalTokenBalanceRequest request,
+        ServerCallContext context)
+    {
+        var balance = await tokenService.GetPersonalTokenBalanceAsync(
+            GrpcParsing.ReadDomainServiceId(context),
+            GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
+            context.CancellationToken);
+
+        return ToResponse(balance);
+    }
+
+    public override async Task<Internal.Contracts.TokenBalanceResponse> GetOrganizationTokenBalance(
+        Internal.Contracts.GetOrganizationTokenBalanceRequest request,
+        ServerCallContext context)
+    {
+        var balance = await tokenService.GetOrganizationTokenBalanceAsync(
+            GrpcParsing.ReadDomainServiceId(context),
+            GrpcParsing.ParseGuid(request.OrganizationId, nameof(request.OrganizationId)),
+            context.CancellationToken);
+
+        return ToResponse(balance);
+    }
+
+    private static Internal.Contracts.TokenBalanceResponse ToResponse(TokenBalance balance) => new()
+    {
+        FreeTokensCount = balance.FreeTokensCount,
+        SubscriptionTokensCount = balance.SubscriptionTokensCount,
+        PurchasedTokensCount = balance.PurchasedTokensCount,
+    };
+
+    public override async Task<Internal.Contracts.GetTokenTransactionsResponse> GetTokenTransactions(
+        Internal.Contracts.GetTokenTransactionsRequest request,
+        ServerCallContext context)
+    {
+        var page = await tokenService.GetTokenTransactionsAsync(
+            GrpcParsing.ParseGuid(request.PaidEntityId, nameof(request.PaidEntityId)),
+            new PaginationData { Page = request.Page, PerPage = request.PerPage },
+            context.CancellationToken);
+
+        var response = new Internal.Contracts.GetTokenTransactionsResponse { HasNextPage = page.HasNextPage };
+        response.Items.AddRange(page.Data.Select(ToItem));
+
+        return response;
+    }
+
+    private static Internal.Contracts.TokenTransactionItem ToItem(TokenTransactionItem item)
+    {
+        var contractItem = new Internal.Contracts.TokenTransactionItem
+        {
+            Id = item.Id.ToString(),
+            Status = ToContractStatus(item.Status),
+            Reason = ToContractReason(item.Reason),
+            CreatedAt = Timestamp.FromDateTime(DateTime.SpecifyKind(item.CreatedAt, DateTimeKind.Utc)),
+            Delta = item.Delta,
+            Error = item.Error ?? string.Empty,
+        };
+
+        if (item.FinishedAt is { } finishedAt)
+        {
+            contractItem.FinishedAt = Timestamp.FromDateTime(DateTime.SpecifyKind(finishedAt, DateTimeKind.Utc));
+        }
+
+        return contractItem;
+    }
+
+    private static Internal.Contracts.TokenTransactionStatus ToContractStatus(TokenSpentStatus status) => status switch
+    {
+        TokenSpentStatus.Started => Internal.Contracts.TokenTransactionStatus.Started,
+        TokenSpentStatus.Canceled => Internal.Contracts.TokenTransactionStatus.Canceled,
+        TokenSpentStatus.Confirmed => Internal.Contracts.TokenTransactionStatus.Confirmed,
+        _ => throw new ArgumentOutOfRangeException(nameof(status), status, null),
+    };
+
+    private static Internal.Contracts.TokenTransactionReason ToContractReason(TokenTransactionReason reason) => reason switch
+    {
+        TokenTransactionReason.TariffGrant => Internal.Contracts.TokenTransactionReason.TariffGrant,
+        TokenTransactionReason.DailyGrant => Internal.Contracts.TokenTransactionReason.DailyGrant,
+        TokenTransactionReason.Purchase => Internal.Contracts.TokenTransactionReason.Purchase,
+        TokenTransactionReason.Expiry => Internal.Contracts.TokenTransactionReason.Expiry,
+        TokenTransactionReason.Spend => Internal.Contracts.TokenTransactionReason.Spend,
+        _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, null),
+    };
 }
