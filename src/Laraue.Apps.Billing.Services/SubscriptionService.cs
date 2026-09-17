@@ -167,9 +167,9 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                     PaidEntityId = paidEntityId,
                     Status = SubscriptionStatus.Active,
                     CurrentPeriodStartedAt = now,
-                    // Free is BillingPeriod.Forever - a far-future sentinel instead of a real
-                    // renewal date, since this is a one-time provision with nothing to renew.
-                    CurrentPeriodFinishesAt = now.AddYears(100),
+                    // Free is BillingPeriod.Forever - null instead of a real renewal date, since
+                    // this is a one-time provision with nothing to renew.
+                    CurrentPeriodFinishesAt = null,
                 });
 
                 balance = new BalanceSubscriptionToken
@@ -367,7 +367,8 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
     /// <summary>
     /// A subscription counts as active when it hasn't been cancelled AND its current paid period
     /// hasn't lapsed - <see cref="SubscriptionStatus"/> alone isn't enough, since a renewal job
-    /// could fail to flip a lapsed row to <see cref="SubscriptionStatus.Cancelled"/> in time.
+    /// could fail to flip a lapsed row to <see cref="SubscriptionStatus.Cancelled"/> in time. A
+    /// null <see cref="SubscriptionEntity.CurrentPeriodFinishesAt"/> means it never lapses (Free).
     /// </summary>
     private IQueryable<SubscriptionEntity> GetActiveSubscriptionsQuery(ServiceId serviceId, Guid paidEntityId)
     {
@@ -377,7 +378,7 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
             .Where(s => s.ServiceId == serviceId
                 && s.PaidEntityId == paidEntityId
                 && s.Status == SubscriptionStatus.Active
-                && s.CurrentPeriodFinishesAt > now);
+                && (s.CurrentPeriodFinishesAt == null || s.CurrentPeriodFinishesAt > now));
     }
 }
 

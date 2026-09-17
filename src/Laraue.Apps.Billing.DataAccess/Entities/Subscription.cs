@@ -26,7 +26,12 @@ public class Subscription
     public SubscriptionStatus Status { get; set; }
     
     public DateTime CurrentPeriodStartedAt { get; set; }
-    public DateTime CurrentPeriodFinishesAt { get; set; }
+
+    /// <summary>
+    /// Null means the subscription never expires on its own (a <see cref="BillingPeriod.Forever"/>
+    /// tariff, e.g. Free) - there's nothing to renew, so there's no real date to store here.
+    /// </summary>
+    public DateTime? CurrentPeriodFinishesAt { get; set; }
 }
 
 public enum SubscriptionStatus
