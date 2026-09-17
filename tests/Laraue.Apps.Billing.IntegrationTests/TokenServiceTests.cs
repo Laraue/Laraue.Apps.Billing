@@ -4,6 +4,7 @@ using Laraue.Apps.Billing.DataAccess.Entities;
 using Laraue.Apps.Billing.IntegrationTests.Infrastructure;
 using Laraue.Apps.Billing.Services;
 using Laraue.Apps.Billing.WebApiHost;
+using Laraue.Core.DataAccess.Contracts;
 using Laraue.Core.DateTime.Services.Impl;
 using Laraue.Core.Exceptions.Web;
 using Microsoft.EntityFrameworkCore;
@@ -246,6 +247,139 @@ public class TokenServiceTests : BillingIntegrationTest
 
         await Assert.ThrowsAsync<BadRequestException>(() => _tokenService.CancelTokensReservationAsync(
             result.TokenTransactionId!.Value, "too late", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetPersonalTokenBalanceAsync_ShouldReturnRemainingBalanceAcrossAllSources_WhenSubscriptionAndPacksExist()
+    {
+        var paidEntityId = Guid.NewGuid();
+        await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 1000, subscriptionTokens: 500);
+        await SeedPurchasedPackAsync(paidEntityId, SmallPackId, DateTime.UtcNow.AddDays(30));
+        await SetPurchasedBalanceAsync(paidEntityId, 100_000);
+
+        var balance = await _tokenService.GetPersonalTokenBalanceAsync(
+            ServiceId.LaraueBoards, paidEntityId, CancellationToken.None);
+
+        Assert.Equal(1000, balance.FreeTokensCount);
+        Assert.Equal(500, balance.SubscriptionTokensCount);
+        Assert.Equal(100_000, balance.PurchasedTokensCount);
+    }
+
+    [Fact]
+    public async Task GetPersonalTokenBalanceAsync_ShouldAutoProvisionFreeSubscription_WhenNoneExistsYet()
+    {
+        var paidEntityId = Guid.NewGuid();
+
+        var balance = await _tokenService.GetPersonalTokenBalanceAsync(
+            ServiceId.LaraueBoards, paidEntityId, CancellationToken.None);
+
+        Assert.Equal(2_500_000, balance.SubscriptionTokensCount);
+        Assert.Equal(0, balance.FreeTokensCount);
+        Assert.Equal(0, balance.PurchasedTokensCount);
+        Assert.True(await Context.Subscriptions.AnyAsync(s => s.PaidEntityId == paidEntityId));
+    }
+
+    [Fact]
+    public async Task GetPersonalTokenBalanceAsync_ShouldExcludeExpiredPacks_WhenComputingPurchasedBalance()
+    {
+        var paidEntityId = Guid.NewGuid();
+        await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 0, subscriptionTokens: 0);
+        await SeedPurchasedPackAsync(paidEntityId, SmallPackId, DateTime.UtcNow.AddDays(-1));
+        await SetPurchasedBalanceAsync(paidEntityId, 100_000);
+
+        var balance = await _tokenService.GetPersonalTokenBalanceAsync(
+            ServiceId.LaraueBoards, paidEntityId, CancellationToken.None);
+
+        Assert.Equal(0, balance.PurchasedTokensCount);
+    }
+
+    [Fact]
+    public async Task GetOrganizationTokenBalanceAsync_ShouldProvisionTeamFreeTariff_WhenNoneExistsYet()
+    {
+        var organizationId = Guid.NewGuid();
+
+        var balance = await _tokenService.GetOrganizationTokenBalanceAsync(
+            ServiceId.LaraueBoards, organizationId, CancellationToken.None);
+
+        Assert.Equal(2_500_000, balance.SubscriptionTokensCount);
+
+        var subscription = await Context.Subscriptions.SingleAsync(s => s.PaidEntityId == organizationId);
+        var isTeamTariff = await Context.LaraueBoardsTeamTariffs.AnyAsync(t => t.Tariff!.Id == subscription.TariffId);
+        Assert.True(isTeamTariff);
+    }
+
+    [Fact]
+    public async Task GetTokenTransactionsAsync_ShouldReturnTransactionsForPaidEntity_OrderedNewestFirst()
+    {
+        var paidEntityId = Guid.NewGuid();
+        var oldest = await SeedTokenTransactionAsync(paidEntityId, DateTime.UtcNow.AddMinutes(-10));
+        var newest = await SeedTokenTransactionAsync(paidEntityId, DateTime.UtcNow);
+        var middle = await SeedTokenTransactionAsync(paidEntityId, DateTime.UtcNow.AddMinutes(-5));
+
+        var page = await _tokenService.GetTokenTransactionsAsync(
+            paidEntityId, new PaginationData { Page = 0, PerPage = 10 }, CancellationToken.None);
+
+        Assert.Equal([newest, middle, oldest], page.Data.Select(t => t.Id));
+        Assert.False(page.HasNextPage);
+    }
+
+    [Fact]
+    public async Task GetTokenTransactionsAsync_ShouldPaginate_WhenMoreTransactionsThanPageSize()
+    {
+        var paidEntityId = Guid.NewGuid();
+        for (var i = 0; i < 3; i++)
+        {
+            await SeedTokenTransactionAsync(paidEntityId, DateTime.UtcNow.AddMinutes(-i));
+        }
+
+        var firstPage = await _tokenService.GetTokenTransactionsAsync(
+            paidEntityId, new PaginationData { Page = 0, PerPage = 2 }, CancellationToken.None);
+
+        Assert.Equal(2, firstPage.Data.Count);
+        Assert.True(firstPage.HasNextPage);
+
+        var secondPage = await _tokenService.GetTokenTransactionsAsync(
+            paidEntityId, new PaginationData { Page = 1, PerPage = 2 }, CancellationToken.None);
+
+        Assert.Single(secondPage.Data);
+        Assert.False(secondPage.HasNextPage);
+    }
+
+    [Fact]
+    public async Task GetTokenTransactionsAsync_ShouldOnlyReturnTransactionsForThatEntity_WhenMultipleEntitiesExist()
+    {
+        var paidEntityId = Guid.NewGuid();
+        var otherPaidEntityId = Guid.NewGuid();
+        var ownTransactionId = await SeedTokenTransactionAsync(paidEntityId, DateTime.UtcNow);
+        await SeedTokenTransactionAsync(otherPaidEntityId, DateTime.UtcNow);
+
+        var page = await _tokenService.GetTokenTransactionsAsync(
+            paidEntityId, new PaginationData { Page = 0, PerPage = 10 }, CancellationToken.None);
+
+        Assert.Equal([ownTransactionId], page.Data.Select(t => t.Id));
+    }
+
+    private async Task<Guid> SeedTokenTransactionAsync(Guid paidEntityId, DateTime createdAt)
+    {
+        var id = Guid.NewGuid();
+
+        Context.TokenTransactions.Add(new TokenTransaction
+        {
+            Id = id,
+            PaidEntityId = paidEntityId,
+            OwnerId = paidEntityId,
+            Status = TokenSpentStatus.Confirmed,
+            Reason = TokenTransactionReason.Spend,
+            CreatedAt = createdAt,
+            FinishedAt = createdAt,
+            Delta = -10,
+            ReservedAmount = 10,
+            InputTokensCount = 5,
+        });
+
+        await Context.SaveChangesAsync();
+
+        return id;
     }
 
     private async Task<Guid> SeedActiveSubscriptionAsync(Guid paidEntityId, long freeTokens, long subscriptionTokens)

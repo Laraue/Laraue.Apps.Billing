@@ -1,6 +1,8 @@
 using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.DataAccess.Entities;
 using Laraue.Apps.Billing.Services.Resources;
+using Laraue.Core.DataAccess.Contracts;
+using Laraue.Core.DataAccess.EFCore.Extensions;
 using Laraue.Core.DateTime.Services.Abstractions;
 using Laraue.Core.Exceptions.Web;
 using Microsoft.EntityFrameworkCore;
@@ -66,11 +68,70 @@ public interface ITokenService
         Guid tokenTransactionId,
         string error,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns <paramref name="userId"/>'s current remaining balance on <paramref name="serviceId"/>
+    /// - auto-provisioning the Free subscription first if none exists yet, same as
+    /// <see cref="TryReservePersonalTokensAsync"/> - there's no "no balance at all" case to report.
+    /// </summary>
+    Task<TokenBalance> GetPersonalTokenBalanceAsync(
+        ServiceId serviceId,
+        Guid userId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Same as <see cref="GetPersonalTokenBalanceAsync"/>, but for <paramref name="organizationId"/>'s
+    /// team balance instead of a user's personal one.
+    /// </summary>
+    Task<TokenBalance> GetOrganizationTokenBalanceAsync(
+        ServiceId serviceId,
+        Guid organizationId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns <paramref name="paidEntityId"/>'s token transaction ledger, newest first - every
+    /// balance-changing event (grants, spends, refunds via cancel/commit) regardless of which
+    /// service caused it, since the ledger itself has no per-service scoping (see
+    /// <see cref="DataAccess.Entities.TokenTransaction"/> - only <c>PaidEntityId</c> identifies
+    /// whose balance changed).
+    /// </summary>
+    Task<ShortPaginatedResult<TokenTransactionItem>> GetTokenTransactionsAsync(
+        Guid paidEntityId,
+        PaginationData pagination,
+        CancellationToken cancellationToken);
 }
 
 public sealed record ReservationResult
 {
     public Guid? TokenTransactionId { get; init; }
+    public string? Error { get; init; }
+}
+
+/// <summary>
+/// Current remaining balance, broken down by source - a caller reserving tokens draws from
+/// <see cref="FreeTokensCount"/> and <see cref="SubscriptionTokensCount"/> first, then
+/// <see cref="PurchasedTokensCount"/> (see <see cref="TokenService.TryReserveTokensCoreAsync"/>).
+/// </summary>
+public sealed record TokenBalance
+{
+    public required long FreeTokensCount { get; init; }
+    public required long SubscriptionTokensCount { get; init; }
+    public required long PurchasedTokensCount { get; init; }
+}
+
+/// <summary>
+/// One row of a paid entity's token ledger - <see cref="Delta"/> is the balance change (negative
+/// for a spend, positive for a grant/refund); <see cref="ReservedAmount"/>/<see cref="Error"/> only
+/// apply to <see cref="TokenTransactionReason.Spend"/> rows and are null/zero otherwise.
+/// </summary>
+public sealed record TokenTransactionItem
+{
+    public required Guid Id { get; init; }
+    public required TokenSpentStatus Status { get; init; }
+    public required TokenTransactionReason Reason { get; init; }
+    public required DateTime CreatedAt { get; init; }
+    public DateTime? FinishedAt { get; init; }
+    public required long Delta { get; init; }
     public string? Error { get; init; }
 }
 
@@ -138,23 +199,8 @@ public class TokenService(
 
         var subscriptionAvailable = subscriptionBalance.FreeTokensCount + subscriptionBalance.SubscriptionTokensCount;
 
-        // Remaining balance per purchased pack isn't stored directly - it's derived as the
-        // pack's original grant minus whatever's already been charged against it across the
-        // ledger, ordered soonest-expiring first so those are drawn down before longer-lived ones.
-        var purchasedPacks = await context.PurchasedTokenPacks
-            .Where(p => p.PaidEntityId == paidEntityId && p.ExpiredAt > now)
-            .OrderBy(p => p.ExpiredAt)
-            .Select(p => new
-            {
-                p.Id,
-                Granted = p.TokenPack!.TokensCount,
-                Charged = context.TokenTransactionPurchasedTokenPacks
-                    .Where(c => c.PurchasedTokenPackId == p.Id)
-                    .Sum(c => (long?)c.ChargedAmount) ?? 0,
-            })
-            .ToListAsync(cancellationToken);
-
-        var purchasedAvailable = purchasedPacks.Sum(p => p.Granted - p.Charged);
+        var purchasedPacks = await GetUnexpiredPurchasedTokenPacksAsync(paidEntityId, now, cancellationToken);
+        var purchasedAvailable = purchasedPacks.Sum(p => p.Available);
 
         if (subscriptionAvailable + purchasedAvailable < requested)
         {
@@ -192,20 +238,19 @@ public class TokenService(
                 break;
             }
 
-            var available = pack.Granted - pack.Charged;
-            if (available <= 0)
+            if (pack.Available <= 0)
             {
                 continue;
             }
 
-            var fromPack = Math.Min(remaining, available);
+            var fromPack = Math.Min(remaining, pack.Available);
             remaining -= fromPack;
 
             purchasedSpends.Add(new TokenTransactionPurchasedTokenPack
             {
                 PurchasedTokenPackId = pack.Id,
                 ChargedAmount = fromPack,
-                BalanceAfter = available - fromPack,
+                BalanceAfter = pack.Available - fromPack,
             });
         }
 
@@ -237,6 +282,103 @@ public class TokenService(
         await dbTransaction.CommitAsync(cancellationToken);
 
         return new ReservationResult { TokenTransactionId = tokenTransaction.Id };
+    }
+
+    public Task<TokenBalance> GetPersonalTokenBalanceAsync(
+        ServiceId serviceId,
+        Guid userId,
+        CancellationToken cancellationToken)
+        => GetTokenBalanceCoreAsync(
+            userId,
+            ct => subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(serviceId, userId, ct),
+            cancellationToken);
+
+    public Task<TokenBalance> GetOrganizationTokenBalanceAsync(
+        ServiceId serviceId,
+        Guid organizationId,
+        CancellationToken cancellationToken)
+        => GetTokenBalanceCoreAsync(
+            organizationId,
+            ct => subscriptionService.GetOrCreateActiveOrganizationSubscriptionIdAsync(serviceId, organizationId, ct),
+            cancellationToken);
+
+    /// <summary>
+    /// Shared by <see cref="GetPersonalTokenBalanceAsync"/>/<see cref="GetOrganizationTokenBalanceAsync"/>
+    /// - a read-only counterpart to <see cref="TryReserveTokensCoreAsync"/>'s balance lookup, minus
+    /// the draw-down/mutation. No lock/transaction needed since nothing is written here.
+    /// </summary>
+    private async Task<TokenBalance> GetTokenBalanceCoreAsync(
+        Guid paidEntityId,
+        Func<CancellationToken, Task<Guid>> resolveSubscriptionIdAsync,
+        CancellationToken cancellationToken)
+    {
+        var now = dateTimeProvider.UtcNow;
+
+        var subscriptionId = await resolveSubscriptionIdAsync(cancellationToken);
+
+        var subscriptionBalance = await context.BalanceSubscriptionTokens
+            .SingleAsync(b => b.SubscriptionId == subscriptionId, cancellationToken);
+
+        var purchasedPacks = await GetUnexpiredPurchasedTokenPacksAsync(paidEntityId, now, cancellationToken);
+
+        return new TokenBalance
+        {
+            FreeTokensCount = subscriptionBalance.FreeTokensCount,
+            SubscriptionTokensCount = subscriptionBalance.SubscriptionTokensCount,
+            PurchasedTokensCount = purchasedPacks.Sum(p => p.Available),
+        };
+    }
+
+    /// <summary>
+    /// Remaining balance per unexpired purchased pack, ordered soonest-expiring first - not
+    /// stored directly, but derived as each pack's original grant minus whatever's already been
+    /// charged against it across the ledger. Shared by the reserve draw-down and the read-only
+    /// balance query, since both need the same "what's actually left in each pack" computation.
+    /// </summary>
+    private async Task<List<PurchasedTokenPackAvailability>> GetUnexpiredPurchasedTokenPacksAsync(
+        Guid paidEntityId,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        return await context.PurchasedTokenPacks
+            .Where(p => p.PaidEntityId == paidEntityId && p.ExpiredAt > now)
+            .OrderBy(p => p.ExpiredAt)
+            .Select(p => new PurchasedTokenPackAvailability(
+                p.Id,
+                p.TokenPack!.TokensCount,
+                context.TokenTransactionPurchasedTokenPacks
+                    .Where(c => c.PurchasedTokenPackId == p.Id)
+                    .Sum(c => (long?)c.ChargedAmount) ?? 0))
+            .ToListAsync(cancellationToken);
+    }
+
+    private sealed record PurchasedTokenPackAvailability(Guid Id, long Granted, long Charged)
+    {
+        public long Available => Granted - Charged;
+    }
+
+    public Task<ShortPaginatedResult<TokenTransactionItem>> GetTokenTransactionsAsync(
+        Guid paidEntityId,
+        PaginationData pagination,
+        CancellationToken cancellationToken)
+    {
+        return context.TokenTransactions
+            .Where(t => t.PaidEntityId == paidEntityId)
+            // CreatedAt alone can tie for transactions created in the same tick - Id as a
+            // secondary key keeps paging stable instead of an undefined tie-break order.
+            .OrderByDescending(t => t.CreatedAt)
+            .ThenByDescending(t => t.Id)
+            .Select(t => new TokenTransactionItem
+            {
+                Id = t.Id,
+                Status = t.Status,
+                Reason = t.Reason,
+                CreatedAt = t.CreatedAt,
+                FinishedAt = t.FinishedAt,
+                Delta = t.Delta,
+                Error = t.Error,
+            })
+            .ShortPaginateEFAsync(pagination, cancellationToken);
     }
 
     public async Task CommitTokensSpentAsync(

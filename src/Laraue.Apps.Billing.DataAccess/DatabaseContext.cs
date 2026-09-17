@@ -122,5 +122,15 @@ public class DatabaseContext : DbContext, IJobsDbContext
         // ExpiredAt, on every reservation - this table had no index on PaidEntityId at all.
         modelBuilder.Entity<PurchasedTokenPack>()
             .HasIndex(x => new { x.PaidEntityId, x.ExpiredAt });
+
+        // GetTokenTransactionsAsync filters PaidEntityId == x then orders by CreatedAt desc (Id
+        // desc as tie-break) for every page - without this, only the FK index on
+        // SubscriptionTokensSpentId exists, forcing a sequential scan + sort on this table as it
+        // grows (append-only, so it only ever gets bigger). Descending on both columns to match
+        // the query's own ordering exactly, rather than relying on Postgres to reverse-scan an
+        // ascending index for both keys at once.
+        modelBuilder.Entity<TokenTransaction>()
+            .HasIndex(x => new { x.PaidEntityId, x.CreatedAt, x.Id })
+            .IsDescending(false, true, true);
     }
 }

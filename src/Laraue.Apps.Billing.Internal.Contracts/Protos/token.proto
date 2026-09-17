@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "google/protobuf/timestamp.proto";
+
 option csharp_namespace = "Laraue.Apps.Billing.Internal.Contracts";
 package laraue.apps.billing.internal.v1;
 
@@ -27,6 +29,15 @@ service TokenService {
   rpc ReserveOrganizationTokens (ReserveOrganizationTokensRequest) returns (ReserveTokensResponse);
   rpc CommitTokensSpent (CommitTokensSpentRequest) returns (CommitTokensSpentResponse);
   rpc CancelTokensReservation (CancelTokensReservationRequest) returns (CancelTokensReservationResponse);
+
+  // Current remaining balance - same auto-provisioning behavior as the Reserve rpcs above (no
+  // "no balance at all" case to report), same personal/organization split for the same reason.
+  rpc GetPersonalTokenBalance (GetPersonalTokenBalanceRequest) returns (TokenBalanceResponse);
+  rpc GetOrganizationTokenBalance (GetOrganizationTokenBalanceRequest) returns (TokenBalanceResponse);
+
+  // Paginated token transaction ledger for a paid entity - not split personal/organization since
+  // it's keyed only by paid_entity_id, with no per-service or per-kind auto-provisioning to fork on.
+  rpc GetTokenTransactions (GetTokenTransactionsRequest) returns (GetTokenTransactionsResponse);
 }
 
 message ReservePersonalTokensRequest {
@@ -59,4 +70,55 @@ message CancelTokensReservationRequest {
 }
 
 message CancelTokensReservationResponse {
+}
+
+message GetPersonalTokenBalanceRequest {
+  string user_id = 1;
+}
+
+message GetOrganizationTokenBalanceRequest {
+  string organization_id = 1;
+}
+
+message TokenBalanceResponse {
+  int64 free_tokens_count = 1;
+  int64 subscription_tokens_count = 2;
+  int64 purchased_tokens_count = 3;
+}
+
+message GetTokenTransactionsRequest {
+  string paid_entity_id = 1;
+  int32 page = 2;
+  int32 per_page = 3;
+}
+
+message GetTokenTransactionsResponse {
+  repeated TokenTransactionItem items = 1;
+  bool has_next_page = 2;
+}
+
+enum TokenTransactionStatus {
+  TOKEN_TRANSACTION_STATUS_UNSPECIFIED = 0;
+  TOKEN_TRANSACTION_STATUS_STARTED = 1;
+  TOKEN_TRANSACTION_STATUS_CANCELED = 2;
+  TOKEN_TRANSACTION_STATUS_CONFIRMED = 3;
+}
+
+enum TokenTransactionReason {
+  TOKEN_TRANSACTION_REASON_UNSPECIFIED = 0;
+  TOKEN_TRANSACTION_REASON_TARIFF_GRANT = 1;
+  TOKEN_TRANSACTION_REASON_DAILY_GRANT = 2;
+  TOKEN_TRANSACTION_REASON_PURCHASE = 3;
+  TOKEN_TRANSACTION_REASON_EXPIRY = 4;
+  TOKEN_TRANSACTION_REASON_SPEND = 5;
+}
+
+message TokenTransactionItem {
+  string id = 1;
+  TokenTransactionStatus status = 2;
+  TokenTransactionReason reason = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp finished_at = 5;
+  int64 delta = 6;
+  string error = 7;
 }
