@@ -156,7 +156,7 @@ public class TokenServiceTests : BillingIntegrationTest
         var organizationId = Guid.NewGuid();
 
         var result = await _tokenService.TryReserveOrganizationTokensAsync(
-            ServiceId.LaraueBoards, organizationId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None);
+            ServiceId.LaraueBoards, organizationId, Guid.NewGuid(), inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None);
 
         Assert.Null(result.Error);
 
@@ -166,6 +166,21 @@ public class TokenServiceTests : BillingIntegrationTest
             .Select(t => t.Id)
             .SingleAsync();
         Assert.Equal(teamFreeTariffId, subscription.TariffId);
+    }
+
+    [Fact]
+    public async Task TryReserveOrganizationTokensAsync_ShouldRecordActingUserAsOwner_NotTheOrganization()
+    {
+        var organizationId = Guid.NewGuid();
+        await SeedActiveSubscriptionAsync(organizationId, freeTokens: 1000, subscriptionTokens: 0);
+        var actingUserId = Guid.NewGuid();
+
+        var result = await _tokenService.TryReserveOrganizationTokensAsync(
+            ServiceId.LaraueBoards, organizationId, actingUserId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None);
+
+        var tokenTransaction = await Context.TokenTransactions.SingleAsync(t => t.Id == result.TokenTransactionId);
+        Assert.Equal(organizationId, tokenTransaction.PaidEntityId);
+        Assert.Equal(actingUserId, tokenTransaction.OwnerId);
     }
 
     [Fact]
@@ -317,7 +332,8 @@ public class TokenServiceTests : BillingIntegrationTest
         var middle = await SeedTokenTransactionAsync(paidEntityId, DateTime.UtcNow.AddMinutes(-5));
 
         var page = await _tokenService.GetTokenTransactionsAsync(
-            paidEntityId, new PaginationData { Page = 0, PerPage = 10 }, CancellationToken.None);
+            paidEntityId, null,
+            new PaginationData { Page = 0, PerPage = 10 }, CancellationToken.None);
 
         Assert.Equal([newest, middle, oldest], page.Data.Select(t => t.Id));
         Assert.False(page.HasNextPage);
@@ -333,13 +349,15 @@ public class TokenServiceTests : BillingIntegrationTest
         }
 
         var firstPage = await _tokenService.GetTokenTransactionsAsync(
-            paidEntityId, new PaginationData { Page = 0, PerPage = 2 }, CancellationToken.None);
+            paidEntityId, null,
+            new PaginationData { Page = 0, PerPage = 2 }, CancellationToken.None);
 
         Assert.Equal(2, firstPage.Data.Count);
         Assert.True(firstPage.HasNextPage);
 
         var secondPage = await _tokenService.GetTokenTransactionsAsync(
-            paidEntityId, new PaginationData { Page = 1, PerPage = 2 }, CancellationToken.None);
+            paidEntityId, null,
+            new PaginationData { Page = 1, PerPage = 2 }, CancellationToken.None);
 
         Assert.Single(secondPage.Data);
         Assert.False(secondPage.HasNextPage);
@@ -354,12 +372,29 @@ public class TokenServiceTests : BillingIntegrationTest
         await SeedTokenTransactionAsync(otherPaidEntityId, DateTime.UtcNow);
 
         var page = await _tokenService.GetTokenTransactionsAsync(
-            paidEntityId, new PaginationData { Page = 0, PerPage = 10 }, CancellationToken.None);
+            paidEntityId, null,
+            new PaginationData { Page = 0, PerPage = 10 }, CancellationToken.None);
 
         Assert.Equal([ownTransactionId], page.Data.Select(t => t.Id));
     }
 
-    private async Task<Guid> SeedTokenTransactionAsync(Guid paidEntityId, DateTime createdAt)
+    [Fact]
+    public async Task GetTokenTransactionsAsync_ShouldOnlyReturnTransactionsForThatOwner_WhenOwnerIdProvided()
+    {
+        var organizationId = Guid.NewGuid();
+        var firstUserId = Guid.NewGuid();
+        var secondUserId = Guid.NewGuid();
+        var firstUserTransactionId = await SeedTokenTransactionAsync(organizationId, DateTime.UtcNow, ownerId: firstUserId);
+        await SeedTokenTransactionAsync(organizationId, DateTime.UtcNow, ownerId: secondUserId);
+
+        var page = await _tokenService.GetTokenTransactionsAsync(
+            organizationId, firstUserId,
+            new PaginationData { Page = 0, PerPage = 10 }, CancellationToken.None);
+
+        Assert.Equal([firstUserTransactionId], page.Data.Select(t => t.Id));
+    }
+
+    private async Task<Guid> SeedTokenTransactionAsync(Guid paidEntityId, DateTime createdAt, Guid? ownerId = null)
     {
         var id = Guid.NewGuid();
 
@@ -367,7 +402,7 @@ public class TokenServiceTests : BillingIntegrationTest
         {
             Id = id,
             PaidEntityId = paidEntityId,
-            OwnerId = paidEntityId,
+            OwnerId = ownerId ?? paidEntityId,
             Status = TokenSpentStatus.Confirmed,
             Reason = TokenTransactionReason.Spend,
             CreatedAt = createdAt,

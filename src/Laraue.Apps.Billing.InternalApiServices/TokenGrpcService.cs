@@ -43,6 +43,7 @@ public sealed class TokenGrpcService(ITokenService tokenService)
         var result = await tokenService.TryReserveOrganizationTokensAsync(
             GrpcParsing.ReadDomainServiceId(context),
             GrpcParsing.ParseGuid(request.OrganizationId, nameof(request.OrganizationId)),
+            GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
             request.InputTokensCount,
             request.MaxOutputTokensCount,
             context.CancellationToken);
@@ -122,8 +123,13 @@ public sealed class TokenGrpcService(ITokenService tokenService)
         Internal.Contracts.GetTokenTransactionsRequest request,
         ServerCallContext context)
     {
+        var ownerId = string.IsNullOrEmpty(request.OwnerId)
+            ? (Guid?)null
+            : GrpcParsing.ParseGuid(request.OwnerId, nameof(request.OwnerId));
+
         var page = await tokenService.GetTokenTransactionsAsync(
             GrpcParsing.ParseGuid(request.PaidEntityId, nameof(request.PaidEntityId)),
+            ownerId,
             new PaginationData { Page = request.Page, PerPage = request.PerPage },
             context.CancellationToken);
 
@@ -143,6 +149,7 @@ public sealed class TokenGrpcService(ITokenService tokenService)
             CreatedAt = Timestamp.FromDateTime(DateTime.SpecifyKind(item.CreatedAt, DateTimeKind.Utc)),
             Delta = item.Delta,
             Error = item.Error ?? string.Empty,
+            OwnerId = item.OwnerId.ToString(),
         };
 
         if (item.FinishedAt is { } finishedAt)

@@ -50,6 +50,7 @@ message ReserveOrganizationTokensRequest {
   string organization_id = 1;
   int32 input_tokens_count = 2;
   int32 max_output_tokens_count = 3;
+  string user_id = 4;
 }
 
 message ReserveTokensResponse {
@@ -90,6 +91,9 @@ message GetTokenTransactionsRequest {
   string paid_entity_id = 1;
   int32 page = 2;
   int32 per_page = 3;
+  // Optional - narrows to transactions triggered by one specific owner (see
+  // ReserveOrganizationTokensRequest.user_id). Empty means no filter.
+  string owner_id = 4;
 }
 
 message GetTokenTransactionsResponse {
@@ -121,4 +125,5 @@ message TokenTransactionItem {
   google.protobuf.Timestamp finished_at = 5;
   int64 delta = 6;
   string error = 7;
+  string owner_id = 8;
 }

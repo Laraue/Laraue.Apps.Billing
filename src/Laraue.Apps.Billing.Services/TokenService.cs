@@ -41,11 +41,16 @@ public interface ITokenService
     /// <paramref name="organizationId"/>'s team balance instead of a user's personal one - kept
     /// separate (rather than a personal/organization flag) since this service has no
     /// User/Organization tables and can't otherwise tell which kind of Free tariff to
-    /// auto-provision for an entity with no subscription yet.
+    /// auto-provision for an entity with no subscription yet. <paramref name="userId"/> is the
+    /// team member who actually triggered the spend - recorded as the transaction's
+    /// <see cref="DataAccess.Entities.TokenTransaction.OwnerId"/>, distinct from
+    /// <paramref name="organizationId"/> (the entity actually billed), so an admin can later see
+    /// who on the team spent what.
     /// </summary>
     Task<ReservationResult> TryReserveOrganizationTokensAsync(
         ServiceId serviceId,
         Guid organizationId,
+        Guid userId,
         int inputTokensCount,
         int maxOutputTokensCount,
         CancellationToken cancellationToken);
@@ -93,10 +98,14 @@ public interface ITokenService
     /// balance-changing event (grants, spends, refunds via cancel/commit) regardless of which
     /// service caused it, since the ledger itself has no per-service scoping (see
     /// <see cref="DataAccess.Entities.TokenTransaction"/> - only <c>PaidEntityId</c> identifies
-    /// whose balance changed).
+    /// whose balance changed). <paramref name="ownerId"/> optionally narrows this to transactions
+    /// triggered by one specific team member (see <see cref="TryReserveOrganizationTokensAsync"/>) -
+    /// meaningless (every row's owner already equals <paramref name="paidEntityId"/>) for a
+    /// personal ledger, but useful for an organization's.
     /// </summary>
     Task<ShortPaginatedResult<TokenTransactionItem>> GetTokenTransactionsAsync(
         Guid paidEntityId,
+        Guid? ownerId,
         PaginationData pagination,
         CancellationToken cancellationToken);
 }
@@ -127,6 +136,7 @@ public sealed record TokenBalance
 public sealed record TokenTransactionItem
 {
     public required Guid Id { get; init; }
+    public required Guid OwnerId { get; init; }
     public required TokenSpentStatus Status { get; init; }
     public required TokenTransactionReason Reason { get; init; }
     public required DateTime CreatedAt { get; init; }
@@ -148,6 +158,7 @@ public class TokenService(
         CancellationToken cancellationToken)
         => TryReserveTokensCoreAsync(
             userId,
+            userId,
             ct => subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(serviceId, userId, ct),
             inputTokensCount,
             maxOutputTokensCount,
@@ -156,11 +167,13 @@ public class TokenService(
     public Task<ReservationResult> TryReserveOrganizationTokensAsync(
         ServiceId serviceId,
         Guid organizationId,
+        Guid userId,
         int inputTokensCount,
         int maxOutputTokensCount,
         CancellationToken cancellationToken)
         => TryReserveTokensCoreAsync(
             organizationId,
+            userId,
             ct => subscriptionService.GetOrCreateActiveOrganizationSubscriptionIdAsync(serviceId, organizationId, ct),
             inputTokensCount,
             maxOutputTokensCount,
@@ -173,9 +186,13 @@ public class TokenService(
     /// identical regardless of personal vs. organization. <paramref name="resolveSubscriptionIdAsync"/>
     /// always provisions a Free subscription if none exists yet, so unlike before Phase 2 there's
     /// no "no subscription at all" case left to handle here - only "not enough tokens on it".
+    /// <paramref name="ownerId"/> is who actually triggered the spend (always equal to
+    /// <paramref name="paidEntityId"/> for a personal reservation, but the acting team member for
+    /// an organization one) - recorded on the transaction separately from who's billed.
     /// </summary>
     private async Task<ReservationResult> TryReserveTokensCoreAsync(
         Guid paidEntityId,
+        Guid ownerId,
         Func<CancellationToken, Task<Guid>> resolveSubscriptionIdAsync,
         int inputTokensCount,
         int maxOutputTokensCount,
@@ -266,7 +283,7 @@ public class TokenService(
         {
             Id = Guid.NewGuid(),
             PaidEntityId = paidEntityId,
-            OwnerId = paidEntityId,
+            OwnerId = ownerId,
             Status = TokenSpentStatus.Started,
             Reason = TokenTransactionReason.Spend,
             CreatedAt = now,
@@ -359,11 +376,19 @@ public class TokenService(
 
     public Task<ShortPaginatedResult<TokenTransactionItem>> GetTokenTransactionsAsync(
         Guid paidEntityId,
+        Guid? ownerId,
         PaginationData pagination,
         CancellationToken cancellationToken)
     {
-        return context.TokenTransactions
-            .Where(t => t.PaidEntityId == paidEntityId)
+        var query = context.TokenTransactions
+            .Where(t => t.PaidEntityId == paidEntityId);
+
+        if (ownerId is { } owner)
+        {
+            query = query.Where(t => t.OwnerId == owner);
+        }
+
+        return query
             // CreatedAt alone can tie for transactions created in the same tick - Id as a
             // secondary key keeps paging stable instead of an undefined tie-break order.
             .OrderByDescending(t => t.CreatedAt)
@@ -371,6 +396,7 @@ public class TokenService(
             .Select(t => new TokenTransactionItem
             {
                 Id = t.Id,
+                OwnerId = t.OwnerId,
                 Status = t.Status,
                 Reason = t.Reason,
                 CreatedAt = t.CreatedAt,
