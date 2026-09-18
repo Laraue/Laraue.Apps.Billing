@@ -45,6 +45,30 @@ public sealed class SubscriptionGrpcService(ISubscriptionService subscriptionSer
         return ToResponse(subscription);
     }
 
+    public override async Task<Internal.Contracts.TariffNameResponse> GetPersonalTariffName(
+        Internal.Contracts.GetActivePersonalSubscriptionRequest request,
+        ServerCallContext context)
+    {
+        var subscription = await subscriptionService.GetActivePersonalSubscriptionAsync(
+            GrpcParsing.ToDomainServiceId(request.ServiceId),
+            GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
+            context.CancellationToken);
+
+        return new Internal.Contracts.TariffNameResponse { Name = subscription.Code };
+    }
+
+    public override async Task<Internal.Contracts.TariffNameResponse> GetOrganizationTariffName(
+        Internal.Contracts.GetActiveOrganizationSubscriptionRequest request,
+        ServerCallContext context)
+    {
+        var subscription = await subscriptionService.GetActiveOrganizationSubscriptionAsync(
+            GrpcParsing.ToDomainServiceId(request.ServiceId),
+            GrpcParsing.ParseGuid(request.OrganizationId, nameof(request.OrganizationId)),
+            context.CancellationToken);
+
+        return new Internal.Contracts.TariffNameResponse { Name = subscription.Code };
+    }
+
     private static Internal.Contracts.ActiveSubscriptionResponse ToResponse(ActiveSubscription subscription)
     {
         var response = new Internal.Contracts.ActiveSubscriptionResponse { Code = subscription.Code };
