@@ -52,14 +52,20 @@ public sealed class SubscriptionGrpcService(ISubscriptionService subscriptionSer
         switch (subscription)
         {
             case LaraueBoardsPersonalActiveSubscription s:
-                var personal = new Internal.Contracts.LaraueBoardsPersonalSubscription();
+                var personal = new Internal.Contracts.LaraueBoardsPersonalSubscription
+                {
+                    IncludedTokensCount = s.IncludedTokensCount,
+                };
                 if (s.LimitIssuesPerMonth is { } personalLimit) personal.LimitIssuesPerMonth = personalLimit;
                 if (s.LimitFreeTeamOrganizationsCount is { } limitOrgs) personal.LimitFreeTeamOrganizationsCount = limitOrgs;
                 response.LaraueBoardsPersonal = personal;
                 break;
 
             case LaraueBoardsTeamActiveSubscription s:
-                var team = new Internal.Contracts.LaraueBoardsTeamSubscription();
+                var team = new Internal.Contracts.LaraueBoardsTeamSubscription
+                {
+                    IncludedTokensCount = s.IncludedTokensCount,
+                };
                 if (s.LimitIssuesPerMonth is { } teamLimit) team.LimitIssuesPerMonth = teamLimit;
                 response.LaraueBoardsTeam = team;
                 break;

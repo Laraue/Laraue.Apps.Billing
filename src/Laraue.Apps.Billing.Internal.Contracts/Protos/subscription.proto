@@ -44,10 +44,12 @@ message ActiveSubscriptionResponse {
 message LaraueBoardsPersonalSubscription {
   optional int32 limit_issues_per_month = 1;
   optional int32 limit_free_team_organizations_count = 2;
+  int64 included_tokens_count = 3;
 }
 
 message LaraueBoardsTeamSubscription {
   optional int32 limit_issues_per_month = 1;
+  int64 included_tokens_count = 2;
 }
 
 message MarkdownTranslatorSubscription {

@@ -304,6 +304,8 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                 (s, t) => new
                 {
                     s.Tariff!.Title,
+                    s.Tariff.IncludedTokensCount,
+                    s.Tariff.IncludedTokensCountMvpOverride,
                     t.LimitIssuesPerMonth,
                     t.LimitIssuesPerMonthMvpOverride,
                     t.LimitFreeTeamOrganizationsCount,
@@ -317,6 +319,7 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
             LimitIssuesPerMonth = row.LimitIssuesPerMonthMvpOverride ?? row.LimitIssuesPerMonth,
             LimitFreeTeamOrganizationsCount =
                 row.LimitFreeTeamOrganizationsCountMvpOverride ?? row.LimitFreeTeamOrganizationsCount,
+            IncludedTokensCount = row.IncludedTokensCountMvpOverride ?? row.IncludedTokensCount,
         };
     }
 
@@ -332,13 +335,21 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
             .Join(context.LaraueBoardsTeamTariffs,
                 s => s.TariffId,
                 t => t.Tariff!.Id,
-                (s, t) => new { s.Tariff!.Title, t.LimitIssuesPerMonth, t.LimitIssuesPerMonthMvpOverride })
+                (s, t) => new
+                {
+                    s.Tariff!.Title,
+                    s.Tariff.IncludedTokensCount,
+                    s.Tariff.IncludedTokensCountMvpOverride,
+                    t.LimitIssuesPerMonth,
+                    t.LimitIssuesPerMonthMvpOverride,
+                })
             .SingleAsync(cancellationToken);
 
         return new LaraueBoardsTeamActiveSubscription
         {
             Code = row.Title,
             LimitIssuesPerMonth = row.LimitIssuesPerMonthMvpOverride ?? row.LimitIssuesPerMonth,
+            IncludedTokensCount = row.IncludedTokensCountMvpOverride ?? row.IncludedTokensCount,
         };
     }
 
@@ -391,11 +402,13 @@ public sealed record LaraueBoardsPersonalActiveSubscription : ActiveSubscription
 {
     public int? LimitIssuesPerMonth { get; set; }
     public int? LimitFreeTeamOrganizationsCount { get; set; }
+    public required long IncludedTokensCount { get; set; }
 }
 
 public sealed record LaraueBoardsTeamActiveSubscription : ActiveSubscription
 {
     public int? LimitIssuesPerMonth { get; set; }
+    public required long IncludedTokensCount { get; set; }
 }
 
 public sealed record MarkdownTranslatorActiveSubscription : ActiveSubscription

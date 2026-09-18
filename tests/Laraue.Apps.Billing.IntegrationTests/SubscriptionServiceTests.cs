@@ -44,6 +44,32 @@ public class SubscriptionServiceTests : BillingIntegrationTest
     }
 
     [Fact]
+    public async Task GetActivePersonalSubscriptionAsync_ShouldReturnTariffNameAndIncludedTokensCount_Always()
+    {
+        var userId = Guid.NewGuid();
+
+        var subscription = await _subscriptionService.GetActivePersonalSubscriptionAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None);
+
+        var personal = Assert.IsType<LaraueBoardsPersonalActiveSubscription>(subscription);
+        Assert.Equal("Free", personal.Code);
+        Assert.Equal(2_500_000, personal.IncludedTokensCount);
+    }
+
+    [Fact]
+    public async Task GetActiveOrganizationSubscriptionAsync_ShouldReturnTariffNameAndIncludedTokensCount_Always()
+    {
+        var organizationId = Guid.NewGuid();
+
+        var subscription = await _subscriptionService.GetActiveOrganizationSubscriptionAsync(
+            ServiceId.LaraueBoards, organizationId, CancellationToken.None);
+
+        var team = Assert.IsType<LaraueBoardsTeamActiveSubscription>(subscription);
+        Assert.Equal("Free", team.Code);
+        Assert.Equal(2_500_000, team.IncludedTokensCount);
+    }
+
+    [Fact]
     public async Task GetOrCreateActivePersonalSubscriptionIdAsync_ShouldReturnSameSubscription_WhenCalledTwice()
     {
         var userId = Guid.NewGuid();
