@@ -17,4 +17,12 @@ public class BalanceSubscriptionToken
     /// instant - only "which day" ever matters here, never a time within it.
     /// </summary>
     public DateOnly? LastDailyGrantAt { get; set; }
+
+    /// <summary>
+    /// UTC date the free monthly allowance (a free tariff's <c>IncludedTokensCount</c>) was last
+    /// topped up - <see langword="null"/> if it never has been. Used to reset (not accumulate)
+    /// <see cref="FreeTokensCount"/> once per calendar month. A date, not an instant - only "which
+    /// month" ever matters here.
+    /// </summary>
+    public DateOnly? LastMonthlyGrantAt { get; set; }
 }

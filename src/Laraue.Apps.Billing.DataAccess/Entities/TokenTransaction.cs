@@ -47,7 +47,8 @@ public enum TokenSpentStatus
 public enum TokenTransactionReason
 {
     /// <summary>
-    /// Tariff has been bought and included tokens added.
+    /// Tokens included in a tariff have been added: a paid tariff was bought, or a free tariff's
+    /// monthly allowance was refreshed.
     /// </summary>
     TariffGrant,
     

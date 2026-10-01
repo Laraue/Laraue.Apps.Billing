@@ -35,12 +35,14 @@ public class SubscriptionServiceTests : BillingIntegrationTest
         Assert.Equal(userId, subscription.PaidEntityId);
 
         var balance = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
-        Assert.Equal(2_500_000, balance.SubscriptionTokensCount);
+        Assert.Equal(0, balance.SubscriptionTokensCount);
+        Assert.Equal(25_000, balance.FreeTokensCount);
+        Assert.Equal(new DateOnly(2026, 1, 1), balance.LastMonthlyGrantAt);
 
         var grant = await Context.TokenTransactions.SingleAsync(t => t.PaidEntityId == userId);
         Assert.Equal(TokenTransactionReason.TariffGrant, grant.Reason);
         Assert.Equal(TokenSpentStatus.Confirmed, grant.Status);
-        Assert.Equal(2_500_000, grant.Delta);
+        Assert.Equal(25_000, grant.Delta);
     }
 
     [Fact]
@@ -53,7 +55,9 @@ public class SubscriptionServiceTests : BillingIntegrationTest
 
         var personal = Assert.IsType<LaraueBoardsPersonalActiveSubscription>(subscription);
         Assert.Equal("Free", personal.Code);
-        Assert.Equal(2_500_000, personal.IncludedTokensCount);
+        Assert.Equal(25_000, personal.IncludedTokensCount);
+        Assert.Equal(500, personal.LimitIssuesPerMonth);
+        Assert.Equal(1, personal.LimitFreeTeamOrganizationsCount);
     }
 
     [Fact]
@@ -66,7 +70,8 @@ public class SubscriptionServiceTests : BillingIntegrationTest
 
         var team = Assert.IsType<LaraueBoardsTeamActiveSubscription>(subscription);
         Assert.Equal("Free", team.Code);
-        Assert.Equal(2_500_000, team.IncludedTokensCount);
+        Assert.Equal(25_000, team.IncludedTokensCount);
+        Assert.Equal(500, team.LimitIssuesPerMonth);
     }
 
     [Fact]
@@ -144,6 +149,102 @@ public class SubscriptionServiceTests : BillingIntegrationTest
 
         var balanceAfter = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
         Assert.Equal(100, balanceAfter.FreeTokensCount);
+    }
+
+    [Fact]
+    public async Task GetOrCreateActivePersonalSubscriptionIdAsync_ShouldResetMonthlyFreeTokens_WhenNewMonthHasStarted()
+    {
+        var userId = Guid.NewGuid();
+
+        var subscriptionId = await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None);
+
+        var balance = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        balance.FreeTokensCount = 100;
+        await Context.SaveChangesAsync();
+
+        // Later in the same month: nothing is granted again.
+        _dateTimeProvider.UtcNow = new DateTime(2026, 1, 31, 23, 0, 0, DateTimeKind.Utc);
+        await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None);
+
+        var balanceSameMonth = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        Assert.Equal(100, balanceSameMonth.FreeTokensCount);
+
+        // First call of the next month: the allowance is reset to 10k (not added to the 100 left).
+        _dateTimeProvider.UtcNow = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc);
+        await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None);
+
+        var balanceNextMonth = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        Assert.Equal(25_000, balanceNextMonth.FreeTokensCount);
+        Assert.Equal(0, balanceNextMonth.SubscriptionTokensCount);
+        Assert.Equal(new DateOnly(2026, 2, 1), balanceNextMonth.LastMonthlyGrantAt);
+
+        // The ledger carries the net change, so it still sums to the balance.
+        var deltas = await Context.TokenTransactions
+            .Where(t => t.PaidEntityId == userId && t.Reason == TokenTransactionReason.TariffGrant)
+            .OrderBy(t => t.CreatedAt)
+            .Select(t => t.Delta)
+            .ToListAsync();
+        Assert.Equal([25_000L, 24_900L], deltas);
+    }
+
+    [Fact]
+    public async Task GetOrCreateActiveOrganizationSubscriptionIdAsync_ShouldGrantMonthlyFreeTokens_WhenNoneExists()
+    {
+        var organizationId = Guid.NewGuid();
+
+        var subscriptionId = await _subscriptionService.GetOrCreateActiveOrganizationSubscriptionIdAsync(
+            ServiceId.LaraueBoards, organizationId, CancellationToken.None);
+
+        var balance = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        Assert.Equal(25_000, balance.FreeTokensCount);
+        Assert.Equal(0, balance.SubscriptionTokensCount);
+    }
+
+    [Fact]
+    public async Task GetOrCreateActivePersonalSubscriptionIdAsync_ShouldKeepExistingSubscriptionTokens_WhenMonthlyAllowanceIsFirstGranted()
+    {
+        var userId = Guid.NewGuid();
+
+        var subscriptionId = await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None);
+
+        // What a subscription provisioned before monthly allowances looks like: the old one-time
+        // grant sits in the subscription balance and no monthly top-up has ever happened.
+        var balance = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        balance.SubscriptionTokensCount = 2_500_000;
+        balance.FreeTokensCount = 0;
+        balance.LastMonthlyGrantAt = null;
+        await Context.SaveChangesAsync();
+
+        await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None);
+
+        var balanceAfter = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        Assert.Equal(2_500_000, balanceAfter.SubscriptionTokensCount);
+        Assert.Equal(25_000, balanceAfter.FreeTokensCount);
+    }
+
+    [Fact]
+    public async Task GetOrCreateActivePersonalSubscriptionIdAsync_ShouldNotTouchDailyAllowance_ForMarkdownTranslatorInNewMonth()
+    {
+        var userId = Guid.NewGuid();
+
+        var subscriptionId = await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.MarkdownTranslator, userId, CancellationToken.None);
+
+        _dateTimeProvider.UtcNow = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc);
+        await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.MarkdownTranslator, userId, CancellationToken.None);
+
+        // Markdown Translator's Free tariff has no monthly allowance: only the daily one applies.
+        var balance = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        Assert.Equal(10_000, balance.FreeTokensCount);
+        Assert.Equal(0, balance.SubscriptionTokensCount);
+        Assert.Null(balance.LastMonthlyGrantAt);
+        Assert.Equal(new DateOnly(2026, 2, 1), balance.LastDailyGrantAt);
     }
 
     [Fact]

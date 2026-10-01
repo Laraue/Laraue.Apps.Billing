@@ -10,10 +10,7 @@ public static class MarkdownTranslatorTariffsData
     private static readonly Guid PlusId = new("67307208-94fa-4da8-8ad4-d6902ba2a1a5");
     private static readonly Guid ProId = new("7aa60cba-ee52-4150-922d-2ea9b6c7aeb5");
 
-    // Paid tariffs aren't purchasable yet (no checkout flow exists), so Free is the only tariff
-    // anyone actually gets. IncludedTokensCount stays the real, advertised Free-tier grant - the
-    // elevated MVP-stage ceiling actually enforced lives on IncludedTokensCountMvpOverride instead,
-    // so ending MVP later is just nulling that out, with nothing to re-type or forget.
+    // Free has no monthly allowance (IncludedTokensCount = 0) - its tokens are the daily allowance.
     private static readonly TariffSeed<MarkdownTranslatorPersonalTariff> Free =
         new(
             new Tariff
@@ -22,7 +19,6 @@ public static class MarkdownTranslatorTariffsData
                 Title = "Free",
                 Id = FreeId,
                 IncludedTokensCount = 0,
-                IncludedTokensCountMvpOverride = 1_200_000,
                 IsActive = true,
                 IsFree = true,
                 Price = 0,

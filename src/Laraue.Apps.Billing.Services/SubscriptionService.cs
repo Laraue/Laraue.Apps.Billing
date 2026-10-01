@@ -150,12 +150,6 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                         nameof(serviceId),
                         string.Format(Errors.UnknownService, serviceId));
 
-                var tariff = await context.Tariffs
-                    .Where(t => t.Id == tariffId)
-                    .Select(t => new { t.IncludedTokensCount, t.IncludedTokensCountMvpOverride })
-                    .SingleAsync(cancellationToken);
-
-                var grantAmount = tariff.IncludedTokensCountMvpOverride ?? tariff.IncludedTokensCount;
                 subscriptionId = Guid.NewGuid();
 
                 context.Subscriptions.Add(new SubscriptionEntity
@@ -172,31 +166,19 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                     CurrentPeriodFinishesAt = null,
                 });
 
+                // Starts empty: a Free tariff's tokens are its recurring free allowance, granted by
+                // the top-ups below (which also write the ledger row), not a one-time grant.
                 balance = new BalanceSubscriptionToken
                 {
                     SubscriptionId = subscriptionId,
-                    SubscriptionTokensCount = grantAmount,
+                    SubscriptionTokensCount = 0,
                     FreeTokensCount = 0,
                 };
                 context.BalanceSubscriptionTokens.Add(balance);
-
-                // Represented purely on the parent row, no SubscriptionTokensSpent/
-                // PurchasedTokensSpent child - those tables' Charged* fields are spend-shaped, so
-                // reusing them for a grant (an addition, not a deduction) would be backwards.
-                context.TokenTransactions.Add(new TokenTransaction
-                {
-                    Id = Guid.NewGuid(),
-                    PaidEntityId = paidEntityId,
-                    OwnerId = paidEntityId,
-                    Status = TokenSpentStatus.Confirmed,
-                    Reason = TokenTransactionReason.TariffGrant,
-                    CreatedAt = now,
-                    FinishedAt = now,
-                    Delta = grantAmount,
-                });
             }
 
             await ApplyDailyGrantTopUpIfNeededAsync(tariffId, paidEntityId, balance, now, cancellationToken);
+            await ApplyMonthlyGrantTopUpIfNeededAsync(tariffId, paidEntityId, balance, now, cancellationToken);
 
             await context.SaveChangesAsync(cancellationToken);
 
@@ -265,6 +247,61 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
     }
 
     /// <summary>
+    /// A free (<see cref="Tariff.IsFree"/>, <see cref="BillingPeriod.Forever"/>) tariff never renews,
+    /// so its <see cref="Tariff.IncludedTokensCount"/> is a monthly allowance instead: resets
+    /// (doesn't accumulate) <see cref="BalanceSubscriptionToken.FreeTokensCount"/> to that amount
+    /// once per UTC calendar month, the same way the daily allowance does per day. A no-op when
+    /// the amount is zero (a tariff without a monthly allowance, e.g. Markdown Translator's Free
+    /// tariff, which keeps its daily allowance in the same <c>FreeTokensCount</c> bucket) and for
+    /// paid tariffs. The ledger delta is the *net* change, so the ledger stays an accurate sum of
+    /// the balance even though unused tokens from the prior month are discarded.
+    /// </summary>
+    private async Task ApplyMonthlyGrantTopUpIfNeededAsync(
+        Guid tariffId,
+        Guid paidEntityId,
+        BalanceSubscriptionToken balance,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var monthlyAmount = await context.Tariffs
+            .Where(t => t.Id == tariffId && t.IsFree && t.BillingPeriod == BillingPeriod.Forever)
+            .Select(t => (long?)t.IncludedTokensCount)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (monthlyAmount is null or <= 0)
+        {
+            return;
+        }
+
+        var today = DateOnly.FromDateTime(now);
+        if (balance.LastMonthlyGrantAt is { } lastGrant
+            && lastGrant.Year == today.Year
+            && lastGrant.Month == today.Month)
+        {
+            return;
+        }
+
+        var delta = monthlyAmount.Value - balance.FreeTokensCount;
+        balance.FreeTokensCount = monthlyAmount.Value;
+        balance.LastMonthlyGrantAt = today;
+
+        // Represented purely on the parent row, no SubscriptionTokensSpent/PurchasedTokensSpent
+        // child - those tables' Charged* fields are spend-shaped, so reusing them for a grant (an
+        // addition, not a deduction) would be backwards.
+        context.TokenTransactions.Add(new TokenTransaction
+        {
+            Id = Guid.NewGuid(),
+            PaidEntityId = paidEntityId,
+            OwnerId = paidEntityId,
+            Status = TokenSpentStatus.Confirmed,
+            Reason = TokenTransactionReason.TariffGrant,
+            CreatedAt = now,
+            FinishedAt = now,
+            Delta = delta,
+        });
+    }
+
+    /// <summary>
     /// Resolves the one <see cref="Tariff.IsFree"/> tariff for a service+personal-or-organization
     /// combination, or <see langword="null"/> for a combination that doesn't sell one (e.g.
     /// MarkdownTranslator has no team tariffs at all) - mirrors which combinations
@@ -305,21 +342,17 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                 {
                     s.Tariff!.Title,
                     s.Tariff.IncludedTokensCount,
-                    s.Tariff.IncludedTokensCountMvpOverride,
                     t.LimitIssuesPerMonth,
-                    t.LimitIssuesPerMonthMvpOverride,
                     t.LimitFreeTeamOrganizationsCount,
-                    t.LimitFreeTeamOrganizationsCountMvpOverride,
                 })
             .SingleAsync(cancellationToken);
 
         return new LaraueBoardsPersonalActiveSubscription
         {
             Code = row.Title,
-            LimitIssuesPerMonth = row.LimitIssuesPerMonthMvpOverride ?? row.LimitIssuesPerMonth,
-            LimitFreeTeamOrganizationsCount =
-                row.LimitFreeTeamOrganizationsCountMvpOverride ?? row.LimitFreeTeamOrganizationsCount,
-            IncludedTokensCount = row.IncludedTokensCountMvpOverride ?? row.IncludedTokensCount,
+            LimitIssuesPerMonth = row.LimitIssuesPerMonth,
+            LimitFreeTeamOrganizationsCount = row.LimitFreeTeamOrganizationsCount,
+            IncludedTokensCount = row.IncludedTokensCount,
         };
     }
 
@@ -339,17 +372,15 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                 {
                     s.Tariff!.Title,
                     s.Tariff.IncludedTokensCount,
-                    s.Tariff.IncludedTokensCountMvpOverride,
                     t.LimitIssuesPerMonth,
-                    t.LimitIssuesPerMonthMvpOverride,
                 })
             .SingleAsync(cancellationToken);
 
         return new LaraueBoardsTeamActiveSubscription
         {
             Code = row.Title,
-            LimitIssuesPerMonth = row.LimitIssuesPerMonthMvpOverride ?? row.LimitIssuesPerMonth,
-            IncludedTokensCount = row.IncludedTokensCountMvpOverride ?? row.IncludedTokensCount,
+            LimitIssuesPerMonth = row.LimitIssuesPerMonth,
+            IncludedTokensCount = row.IncludedTokensCount,
         };
     }
 

@@ -54,6 +54,16 @@ apps (`Laraue.Apps.Boards`) can reference it - see "NuGet publishing" below.
   computed on the fly from the transaction log), keyed by `PaidEntityId`/`SubscriptionId`
   respectively. Keep them in sync with `TokenTransaction` writes rather than trusting them to be
   derivable after the fact.
+- **Free allowances** - a free (`IsFree`, `BillingPeriod.Forever`) tariff never renews, so its tokens
+  come from a recurring top-up of `BalanceSubscriptionToken.FreeTokensCount` that *resets* (never
+  accumulates) it, applied lazily by `SubscriptionService.GetOrCreateActive*SubscriptionIdAsync`:
+  daily for Markdown Translator (`IncludedDailyFreeTokensCount`), monthly for the Boards Free
+  tariffs (`Tariff.IncludedTokensCount`, 25,000 per UTC month - zero means no monthly allowance).
+  Both write to the same `FreeTokensCount` bucket, so a tariff must have one or the other, not both.
+  A new free subscription starts with an empty `SubscriptionTokensCount` (no one-time grant).
+  The monthly top-up writes a `TariffGrant` ledger row (the net change), because
+  `TokenTransactionReason` is mirrored in the published gRPC contract and a new value would need a
+  contracts release.
 - `TokenTransaction` - the append-only ledger of token spend (`Status`
   Started/Canceled/Confirmed, `Reason` TariffGrant/DailyGrant/Purchase/Expiry), linked to which
   purchased pack(s) and/or subscription pack it drew from via

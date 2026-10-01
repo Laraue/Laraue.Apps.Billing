@@ -288,8 +288,8 @@ public class TokenServiceTests : BillingIntegrationTest
         var balance = await _tokenService.GetPersonalTokenBalanceAsync(
             ServiceId.LaraueBoards, paidEntityId, CancellationToken.None);
 
-        Assert.Equal(2_500_000, balance.SubscriptionTokensCount);
-        Assert.Equal(0, balance.FreeTokensCount);
+        Assert.Equal(0, balance.SubscriptionTokensCount);
+        Assert.Equal(25_000, balance.FreeTokensCount);
         Assert.Equal(0, balance.PurchasedTokensCount);
         Assert.True(await Context.Subscriptions.AnyAsync(s => s.PaidEntityId == paidEntityId));
     }
@@ -316,7 +316,8 @@ public class TokenServiceTests : BillingIntegrationTest
         var balance = await _tokenService.GetOrganizationTokenBalanceAsync(
             ServiceId.LaraueBoards, organizationId, CancellationToken.None);
 
-        Assert.Equal(2_500_000, balance.SubscriptionTokensCount);
+        Assert.Equal(0, balance.SubscriptionTokensCount);
+        Assert.Equal(25_000, balance.FreeTokensCount);
 
         var subscription = await Context.Subscriptions.SingleAsync(s => s.PaidEntityId == organizationId);
         var isTeamTariff = await Context.LaraueBoardsTeamTariffs.AnyAsync(t => t.Tariff!.Id == subscription.TariffId);

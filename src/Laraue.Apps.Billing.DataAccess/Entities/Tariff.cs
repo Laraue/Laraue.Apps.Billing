@@ -10,16 +10,15 @@ public class Tariff
     public required string Title { get; set; }
     public required int Price { get; set; }
     public required BillingPeriod BillingPeriod { get; set; }
-    public required long IncludedTokensCount { get; set; }
 
     /// <summary>
-    /// Temporary override of <see cref="IncludedTokensCount"/>, actually enforced in place of it
-    /// while set. Lets a tariff's real, publicly-advertised grant stay accurate on the pricing page
-    /// even while its effective grant is raised for an MVP stage where it isn't purchasable yet -
-    /// see the comment on the Free tariffs' seed data. Ending that stage is nulling this out, not
-    /// re-typing the real value back in.
+    /// Tokens the tariff includes per month. For a <see cref="IsFree"/> tariff with
+    /// <see cref="BillingPeriod.Forever"/> nothing is ever renewed, so this is the free monthly
+    /// allowance instead: <see cref="BalanceSubscriptionToken.FreeTokensCount"/> is reset to it once
+    /// per UTC month (it doesn't roll over) - see <c>SubscriptionService</c>. Zero means the tariff
+    /// has no monthly allowance (e.g. Markdown Translator's Free tariff, which has a daily one).
     /// </summary>
-    public long? IncludedTokensCountMvpOverride { get; set; }
+    public required long IncludedTokensCount { get; set; }
 
     public required bool IsActive { get; set; }
 
