@@ -80,6 +80,17 @@ seeded via EF Core `HasData` in `DatabaseContext.OnModelCreating`, sourced from 
 in `DataAccess/Data/*Data.cs` - there's no admin UI or seeding script; changing a tariff or adding a
 currency means editing the relevant `*Data.cs` class and adding a migration.
 
+## Payments
+
+Provider-agnostic, in `Services/Payments`. Everything provider-specific sits behind `IPaymentProvider`
+(checkout link, notification verification/parsing, the acknowledgement body); a provider is its own
+project that registers an `IPaymentProvider`, and `Payments:DefaultProvider` picks the one new
+checkouts use. `ICorePaymentService.CreateAsync` prices the item from our own tariffs/packs (never from
+the caller), stores a Pending `Payment` and returns the provider's link. `HandleNotificationAsync` is
+idempotent: it locks on the payment id, checks amount/currency against the stored payment, and
+`IPaymentFulfillment` (subscription activation/extension, token pack credit, ledger row) runs in the
+same transaction as the status change. Don't branch on a provider code anywhere outside the provider.
+
 ## Pricing/currency conversion
 
 `PriceCalculator.ConvertPrice` (in `Services`, a static utility - no DB/DI dependency) converts a
