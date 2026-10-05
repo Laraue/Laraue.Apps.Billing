@@ -17,6 +17,8 @@ public class RobokassaPaymentProviderTests
         var options = new RobokassaOptions
         {
             MerchantLogin = "shop",
+            PaymentUrl = "https://auth.robokassa.ru/Merchant/Index.aspx",
+            Culture = "ru",
             Password1 = "pass1",
             Password2 = "pass2",
             TestPassword1 = "testpass1",

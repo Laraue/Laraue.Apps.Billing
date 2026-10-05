@@ -10,45 +10,48 @@ public class RobokassaOptions : IValidatableObject
     /// The shop identifier ("Идентификатор магазина") from the Robokassa technical settings.
     /// </summary>
     [Required]
-    public string MerchantLogin { get; set; } = string.Empty;
+    public string MerchantLogin { get; set; } = null!;
 
     /// <summary>
     /// "Пароль #1": signs the checkout request.
     /// </summary>
-    public string Password1 { get; set; } = string.Empty;
+    public string? Password1 { get; set; }
 
     /// <summary>
     /// "Пароль #2": verifies the result notification.
     /// </summary>
-    public string Password2 { get; set; } = string.Empty;
+    public string? Password2 { get; set; }
 
     /// <summary>
     /// Robokassa keeps a separate pair of passwords for test payments.
     /// </summary>
-    public string TestPassword1 { get; set; } = string.Empty;
+    public string? TestPassword1 { get; set; }
 
-    public string TestPassword2 { get; set; } = string.Empty;
+    public string? TestPassword2 { get; set; }
 
     /// <summary>
-    /// Sends payments in test mode (<c>IsTest=1</c>) and signs with the test passwords.
+    /// Sends payments in test mode (<c>IsTest=1</c>) and signs with the test passwords. Set it in
+    /// appsettings explicitly: <c>true</c> in the base file, <c>false</c> in production.
     /// </summary>
     public bool IsTest { get; set; }
 
     /// <summary>
     /// Must be the algorithm chosen in the shop's technical settings.
     /// </summary>
-    public RobokassaHashAlgorithm HashAlgorithm { get; set; } = RobokassaHashAlgorithm.Md5;
+    public RobokassaHashAlgorithm HashAlgorithm { get; set; }
 
-    public string PaymentUrl { get; set; } = "https://auth.robokassa.ru/Merchant/Index.aspx";
+    [Required]
+    public string PaymentUrl { get; set; } = null!;
 
     /// <summary>
     /// Language of the payment page, e.g. <c>ru</c> or <c>en</c>.
     /// </summary>
-    public string Culture { get; set; } = "ru";
+    [Required]
+    public string Culture { get; set; } = null!;
 
-    public string ActivePassword1 => IsTest ? TestPassword1 : Password1;
+    public string? ActivePassword1 => IsTest ? TestPassword1 : Password1;
 
-    public string ActivePassword2 => IsTest ? TestPassword2 : Password2;
+    public string? ActivePassword2 => IsTest ? TestPassword2 : Password2;
 
     /// <summary>
     /// Which passwords are required depends on <see cref="IsTest"/>, which an attribute cannot express.

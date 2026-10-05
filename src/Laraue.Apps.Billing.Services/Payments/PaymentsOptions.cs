@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Laraue.Apps.Billing.Services.Payments;
 
 public class PaymentsOptions
@@ -7,5 +9,6 @@ public class PaymentsOptions
     /// <summary>
     /// Code of the provider that new checkouts use when the caller does not name one.
     /// </summary>
-    public string DefaultProvider { get; set; } = string.Empty;
+    [Required]
+    public string DefaultProvider { get; set; } = null!;
 }
