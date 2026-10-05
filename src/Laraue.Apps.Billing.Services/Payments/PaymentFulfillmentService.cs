@@ -2,6 +2,7 @@ using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.DataAccess.Entities;
 using Laraue.Core.DateTime.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Laraue.Apps.Billing.Services.Payments;
 
@@ -21,11 +22,19 @@ public interface IPaymentFulfillment
 
 public class PaymentFulfillmentService(
     DatabaseContext context,
-    IDateTimeProvider dateTimeProvider) : IPaymentFulfillment
+    IDateTimeProvider dateTimeProvider,
+    ILogger<PaymentFulfillmentService> logger) : IPaymentFulfillment
 {
     public Task FulfillAsync(Payment payment, CancellationToken cancellationToken)
     {
         context.Database.EnsureTransactionStarted();
+
+        logger.LogInformation(
+            "Fulfilling payment {PaymentId}: {Kind}, paid entity {PaidEntityId}, owner {OwnerId}",
+            payment.Id,
+            payment.Kind,
+            payment.PaidEntityId,
+            payment.OwnerId);
 
         return payment.Kind switch
         {
@@ -59,6 +68,16 @@ public class PaymentFulfillmentService(
                 && (x.CurrentPeriodFinishesAt == null || x.CurrentPeriodFinishesAt > now))
             .SingleOrDefaultAsync(cancellationToken);
 
+        logger.LogInformation(
+            "Payment {PaymentId}: tariff {TariffId} ({IncludedTokensCount} tokens, {BillingPeriod}), current subscription {CurrentSubscriptionId} on tariff {CurrentTariffId} until {CurrentPeriodFinishesAt}",
+            payment.Id,
+            tariff.Id,
+            tariff.IncludedTokensCount,
+            tariff.BillingPeriod,
+            current?.Id,
+            current?.TariffId,
+            current?.CurrentPeriodFinishesAt);
+
         if (current is not null && current.TariffId == tariff.Id)
         {
             var balance = await context.BalanceSubscriptionTokens
@@ -68,6 +87,13 @@ public class PaymentFulfillmentService(
                 current.CurrentPeriodFinishesAt ?? now,
                 tariff.BillingPeriod);
             balance.SubscriptionTokensCount += tariff.IncludedTokensCount;
+
+            logger.LogInformation(
+                "Payment {PaymentId}: subscription {SubscriptionId} extended until {CurrentPeriodFinishesAt}, tokens now {SubscriptionTokensCount}",
+                payment.Id,
+                current.Id,
+                current.CurrentPeriodFinishesAt,
+                balance.SubscriptionTokensCount);
         }
         else
         {
@@ -82,6 +108,12 @@ public class PaymentFulfillmentService(
 
                 current.Status = SubscriptionStatus.Cancelled;
                 current.CurrentPeriodFinishesAt = now;
+
+                logger.LogInformation(
+                    "Payment {PaymentId}: subscription {SubscriptionId} cancelled, {FreeTokensCount} free tokens carried over",
+                    payment.Id,
+                    current.Id,
+                    carriedFreeTokensCount);
             }
 
             var subscriptionId = Guid.NewGuid();
@@ -104,6 +136,14 @@ public class PaymentFulfillmentService(
                 SubscriptionTokensCount = tariff.IncludedTokensCount,
                 FreeTokensCount = carriedFreeTokensCount,
             });
+
+            logger.LogInformation(
+                "Payment {PaymentId}: subscription {SubscriptionId} created on tariff {TariffId} until {CurrentPeriodFinishesAt}, {SubscriptionTokensCount} tokens granted",
+                payment.Id,
+                subscriptionId,
+                tariff.Id,
+                GetPeriodFinish(now, tariff.BillingPeriod),
+                tariff.IncludedTokensCount);
         }
 
         AddLedgerRow(payment, TokenTransactionReason.TariffGrant, tariff.IncludedTokensCount, now);
@@ -120,19 +160,29 @@ public class PaymentFulfillmentService(
             .Select(x => new { x.Id, x.TokensCount, x.ExpirationDuration, x.ExpirationPeriod })
             .SingleAsync(cancellationToken);
 
+        var expiredAt = pack.ExpirationPeriod == BillingPeriod.Month
+            ? now.AddMonths(pack.ExpirationDuration)
+            : now.AddYears(100);
+
         context.PurchasedTokenPacks.Add(new PurchasedTokenPack
         {
             Id = Guid.NewGuid(),
             PaidEntityId = payment.PaidEntityId,
             TokenPackId = pack.Id,
             PurchasedAt = now,
-            ExpiredAt = pack.ExpirationPeriod == BillingPeriod.Month
-                ? now.AddMonths(pack.ExpirationDuration)
-                : now.AddYears(100),
+            ExpiredAt = expiredAt,
         });
 
         var balance = await context.BalancePurchasedTokens
             .SingleOrDefaultAsync(x => x.PaidEntityId == payment.PaidEntityId, cancellationToken);
+
+        logger.LogInformation(
+            "Payment {PaymentId}: token pack {TokenPackId} ({TokensCount} tokens) expires at {ExpiredAt}, purchased balance before {BalanceBefore}",
+            payment.Id,
+            pack.Id,
+            pack.TokensCount,
+            expiredAt,
+            balance?.Balance ?? 0);
 
         if (balance is null)
         {
@@ -155,6 +205,13 @@ public class PaymentFulfillmentService(
 
     private void AddLedgerRow(Payment payment, TokenTransactionReason reason, long delta, DateTime now)
     {
+        logger.LogInformation(
+            "Payment {PaymentId}: ledger row {Reason} {Delta} for paid entity {PaidEntityId}",
+            payment.Id,
+            reason,
+            delta,
+            payment.PaidEntityId);
+
         context.TokenTransactions.Add(new TokenTransaction
         {
             Id = Guid.NewGuid(),

@@ -1,5 +1,6 @@
 using Laraue.Apps.Billing.Services.Resources;
 using Laraue.Core.Exceptions.Web;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Laraue.Apps.Billing.Services.Payments;
@@ -16,15 +17,26 @@ public interface IPaymentProviderRegistry
 
 public class PaymentProviderRegistry(
     IEnumerable<IPaymentProvider> providers,
-    IOptions<PaymentsOptions> options) : IPaymentProviderRegistry
+    IOptions<PaymentsOptions> options,
+    ILogger<PaymentProviderRegistry> logger) : IPaymentProviderRegistry
 {
     public IPaymentProvider Default => Get(options.Value.DefaultProvider);
 
     public IPaymentProvider Get(string code)
     {
-        return providers.FirstOrDefault(p => string.Equals(p.Code, code, StringComparison.OrdinalIgnoreCase))
-            ?? throw new BadRequestException(
+        var provider = providers.FirstOrDefault(p => string.Equals(p.Code, code, StringComparison.OrdinalIgnoreCase));
+        if (provider is null)
+        {
+            logger.LogWarning(
+                "Payment provider '{Code}' is not registered, registered: {RegisteredProviders}",
+                code,
+                string.Join(", ", providers.Select(p => p.Code)));
+
+            throw new BadRequestException(
                 nameof(code),
                 string.Format(Errors.PaymentProviderNotFound, code));
+        }
+
+        return provider;
     }
 }

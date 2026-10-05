@@ -4,6 +4,7 @@ using Laraue.Apps.Billing.Services.Resources;
 using Laraue.Core.DateTime.Services.Abstractions;
 using Laraue.Core.Exceptions.Web;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Laraue.Apps.Billing.Services.Payments;
 
@@ -76,7 +77,8 @@ public class CorePaymentService(
     ICoreTariffService coreTariffService,
     IPaymentProviderRegistry providerRegistry,
     IPaymentFulfillment fulfillment,
-    IDateTimeProvider dateTimeProvider) : ICorePaymentService
+    IDateTimeProvider dateTimeProvider,
+    ILogger<CorePaymentService> logger) : ICorePaymentService
 {
     public async Task<PaymentCheckout> CreateAsync(CreatePaymentRequest request, CancellationToken cancellationToken)
     {
@@ -85,14 +87,39 @@ public class CorePaymentService(
             : providerRegistry.Get(request.ProviderCode);
 
         var currencyCode = request.CurrencyCode.ToUpperInvariant();
+
+        logger.LogInformation(
+            "Creating a payment: {Kind} {ItemId} of service {ServiceId} for paid entity {PaidEntityId} (organization: {IsOrganization}) by owner {OwnerId}, provider {Provider}, currency {CurrencyCode}, return url {ReturnUrl}",
+            request.Kind,
+            request.ItemId,
+            request.ServiceId,
+            request.PaidEntityId,
+            request.IsOrganization,
+            request.OwnerId,
+            provider.Code,
+            currencyCode,
+            request.ReturnUrl);
+
         if (!provider.SupportedCurrencies.Contains(currencyCode))
         {
+            logger.LogWarning(
+                "Payment refused: provider {Provider} does not support currency {CurrencyCode}",
+                provider.Code,
+                currencyCode);
+
             throw new BadRequestException(
                 nameof(request.CurrencyCode),
                 string.Format(Errors.PaymentProviderCurrencyNotSupported, provider.Code, currencyCode));
         }
 
         var item = await GetItemAsync(request, cancellationToken);
+
+        logger.LogInformation(
+            "Payment item {ItemId} resolved: '{Title}', {PriceInUsdCents} USD cents",
+            request.ItemId,
+            item.Title,
+            item.PriceInUsdCents);
+
         var currencyRate = await coreTariffService.GetCurrencyRateAsync(currencyCode, cancellationToken);
 
         var amount = PriceCalculator.ConvertPrice(
@@ -103,14 +130,35 @@ public class CorePaymentService(
 
         // Both supported currencies have two decimal places.
         var amountMinorUnits = (long)decimal.Round(amount * 100, 0, MidpointRounding.AwayFromZero);
+        logger.LogInformation(
+            "Payment item {ItemId} priced at {Amount} {CurrencyCode} ({AmountMinorUnits} minor units): rate to USD {RateToUsd}, rounding step {RoundingStep}, rounding mode {RoundingMode}",
+            request.ItemId,
+            amount,
+            currencyCode,
+            amountMinorUnits,
+            currencyRate.RateToUsd,
+            currencyRate.RoundingStep,
+            currencyRate.RoundingMode);
+
         if (amountMinorUnits <= 0)
         {
+            logger.LogWarning(
+                "Payment refused: item {ItemId} has a non-positive amount {AmountMinorUnits} in {CurrencyCode}",
+                request.ItemId,
+                amountMinorUnits,
+                currencyCode);
+
             throw new BadRequestException(
                 nameof(request.ItemId),
                 string.Format(Errors.PaymentItemNotFound, request.ItemId));
         }
 
         var paymentId = Guid.NewGuid();
+
+        logger.LogInformation(
+            "Asking provider {Provider} for a checkout of payment {PaymentId}",
+            provider.Code,
+            paymentId);
 
         var checkout = await provider.CreateCheckoutAsync(
             new PaymentCheckoutRequest
@@ -122,6 +170,13 @@ public class CorePaymentService(
                 ReturnUrl = request.ReturnUrl,
             },
             cancellationToken);
+
+        logger.LogInformation(
+            "Provider {Provider} created a checkout for payment {PaymentId}: provider payment id {ProviderPaymentId}, url {Url}",
+            provider.Code,
+            paymentId,
+            checkout.ProviderPaymentId,
+            checkout.Url);
 
         context.Payments.Add(new Payment
         {
@@ -143,6 +198,11 @@ public class CorePaymentService(
 
         await context.SaveChangesAsync(cancellationToken);
 
+        logger.LogInformation(
+            "Payment {PaymentId} saved with status {Status}",
+            paymentId,
+            PaymentStatus.Pending);
+
         return new PaymentCheckout(paymentId, checkout.Url);
     }
 
@@ -152,7 +212,37 @@ public class CorePaymentService(
         CancellationToken cancellationToken)
     {
         var provider = providerRegistry.Get(providerCode);
-        var notification = provider.ParseNotification(request);
+
+        // Names only: the values include the provider's signature.
+        logger.LogInformation(
+            "Received a {Provider} notification, parameters: {ParameterNames}, headers: {HeaderNames}, body length {BodyLength}",
+            provider.Code,
+            string.Join(", ", request.Parameters.Keys),
+            string.Join(", ", request.Headers.Keys),
+            request.Body?.Length ?? 0);
+
+        PaymentNotification notification;
+        try
+        {
+            notification = provider.ParseNotification(request);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "A {Provider} notification was rejected while being parsed or verified",
+                provider.Code);
+            throw;
+        }
+
+        logger.LogInformation(
+            "{Provider} notification parsed: payment {PaymentId}, provider payment id {ProviderPaymentId}, outcome {Outcome}, amount {AmountMinorUnits} {CurrencyCode}",
+            provider.Code,
+            notification.PaymentId,
+            notification.ProviderPaymentId,
+            notification.Outcome,
+            notification.AmountMinorUnits,
+            notification.CurrencyCode);
 
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
@@ -162,10 +252,26 @@ public class CorePaymentService(
         await context.Database.PgAdvisoryXactLock(paymentId.ToString(), cancellationToken);
 
         var payment = await context.Payments.SingleAsync(x => x.Id == paymentId, cancellationToken);
+
+        logger.LogInformation(
+            "Handling a notification of payment {PaymentId}: status {Status}, {Kind} {TariffId}{TokenPackId}, paid entity {PaidEntityId}, expected {AmountMinorUnits} {CurrencyCode}",
+            payment.Id,
+            payment.Status,
+            payment.Kind,
+            payment.TariffId,
+            payment.TokenPackId,
+            payment.PaidEntityId,
+            payment.AmountMinorUnits,
+            payment.CurrencyCode);
+
         var acknowledgement = new PaymentNotificationResult(provider.CreateNotificationAck(notification));
 
         if (payment.Status == PaymentStatus.Paid)
         {
+            logger.LogInformation(
+                "Payment {PaymentId} is already paid, nothing to do, sending the acknowledgement again",
+                payment.Id);
+
             return acknowledgement;
         }
 
@@ -173,16 +279,33 @@ public class CorePaymentService(
         {
             EnsureNotificationMatchesPayment(payment, notification);
 
+            logger.LogInformation("Fulfilling payment {PaymentId}", payment.Id);
+
             await fulfillment.FulfillAsync(payment, cancellationToken);
 
             payment.Status = PaymentStatus.Paid;
             payment.PaidAt = dateTimeProvider.UtcNow;
+
+            logger.LogInformation("Payment {PaymentId} fulfilled and marked as paid", payment.Id);
         }
         else if (payment.Status == PaymentStatus.Pending)
         {
             payment.Status = notification.Outcome == PaymentNotificationOutcome.Failed
                 ? PaymentStatus.Failed
                 : PaymentStatus.Canceled;
+
+            logger.LogInformation(
+                "Payment {PaymentId} marked as {Status} by the provider",
+                payment.Id,
+                payment.Status);
+        }
+        else
+        {
+            logger.LogInformation(
+                "Payment {PaymentId} is {Status}, the {Outcome} notification changes nothing",
+                payment.Id,
+                payment.Status,
+                notification.Outcome);
         }
 
         payment.ProviderPaymentId ??= notification.ProviderPaymentId;
@@ -190,6 +313,11 @@ public class CorePaymentService(
 
         await context.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        logger.LogInformation(
+            "Notification of payment {PaymentId} handled, status {Status}",
+            payment.Id,
+            payment.Status);
 
         return acknowledgement;
     }
@@ -211,6 +339,8 @@ public class CorePaymentService(
         }
         else
         {
+            logger.LogWarning("A {Provider} notification references no payment", providerCode);
+
             throw new BadRequestException(
                 nameof(notification),
                 Errors.PaymentNotificationWithoutReference);
@@ -220,12 +350,22 @@ public class CorePaymentService(
             .Select(x => (Guid?)x.Id)
             .SingleOrDefaultAsync(cancellationToken);
 
-        return paymentId
-            ?? throw new NotFoundException(
+        if (paymentId is null)
+        {
+            logger.LogWarning(
+                "No {Provider} payment found for payment id {PaymentId} / provider payment id {ProviderPaymentId}",
+                providerCode,
+                notification.PaymentId,
+                notification.ProviderPaymentId);
+
+            throw new NotFoundException(
                 string.Format(Errors.PaymentNotFound, notification.PaymentId?.ToString() ?? notification.ProviderPaymentId));
+        }
+
+        return paymentId.Value;
     }
 
-    private static void EnsureNotificationMatchesPayment(Payment payment, PaymentNotification notification)
+    private void EnsureNotificationMatchesPayment(Payment payment, PaymentNotification notification)
     {
         var amountMatches = notification.AmountMinorUnits is null
             || notification.AmountMinorUnits == payment.AmountMinorUnits;
@@ -235,6 +375,14 @@ public class CorePaymentService(
 
         if (!amountMatches || !currencyMatches)
         {
+            logger.LogWarning(
+                "Notification does not match payment {PaymentId}: expected {ExpectedAmountMinorUnits} {ExpectedCurrencyCode}, got {AmountMinorUnits} {CurrencyCode}",
+                payment.Id,
+                payment.AmountMinorUnits,
+                payment.CurrencyCode,
+                notification.AmountMinorUnits,
+                notification.CurrencyCode);
+
             throw new BadRequestException(
                 nameof(notification),
                 string.Format(Errors.PaymentNotificationMismatch, payment.Id));
@@ -253,10 +401,21 @@ public class CorePaymentService(
             _ => null,
         };
 
-        return item
-            ?? throw new BadRequestException(
+        if (item is null)
+        {
+            logger.LogWarning(
+                "Payment refused: {Kind} {ItemId} of service {ServiceId} (organization: {IsOrganization}) is not found or not for sale",
+                request.Kind,
+                request.ItemId,
+                request.ServiceId,
+                request.IsOrganization);
+
+            throw new BadRequestException(
                 nameof(request.ItemId),
                 string.Format(Errors.PaymentItemNotFound, request.ItemId));
+        }
+
+        return item;
     }
 
     /// <summary>

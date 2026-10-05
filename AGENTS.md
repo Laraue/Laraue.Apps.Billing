@@ -91,6 +91,12 @@ idempotent: it locks on the payment id, checks amount/currency against the store
 `IPaymentFulfillment` (subscription activation/extension, token pack credit, ledger row) runs in the
 same transaction as the status change. Don't branch on a provider code anywhere outside the provider.
 
+**Log generously at Information** in everything payment-related (the `WebApiHost` runs at Information in
+production): every decision and state change with the ids needed to follow one payment end to end
+(`PaymentId`, provider payment id, paid entity, amounts, statuses), plus a Warning for every refusal.
+Use `ILogger<T>` and structured templates. Never log secrets: a provider logs notification parameter
+*names*, not values, since they carry its signature, and never its passwords or keys.
+
 ## Pricing/currency conversion
 
 `PriceCalculator.ConvertPrice` (in `Services`, a static utility - no DB/DI dependency) converts a
