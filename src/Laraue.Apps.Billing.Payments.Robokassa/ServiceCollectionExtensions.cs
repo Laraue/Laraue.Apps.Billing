@@ -18,12 +18,7 @@ public static class ServiceCollectionExtensions
             services
                 .AddOptions<RobokassaOptions>()
                 .Bind(configuration.GetSection(RobokassaOptions.SectionName))
-                .Validate(
-                    o => !string.IsNullOrWhiteSpace(o.MerchantLogin)
-                        && !string.IsNullOrWhiteSpace(o.ActivePassword1)
-                        && !string.IsNullOrWhiteSpace(o.ActivePassword2),
-                    "Payments:Robokassa needs MerchantLogin and the passwords of the active mode "
-                    + "(Password1/Password2, or TestPassword1/TestPassword2 when IsTest is true).");
+                .ValidateDataAnnotations();
 
             services.TryAddEnumerable(ServiceDescriptor.Singleton<IPaymentProvider, RobokassaPaymentProvider>());
 

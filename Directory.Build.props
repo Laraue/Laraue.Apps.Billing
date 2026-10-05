@@ -26,6 +26,7 @@
     <EfCoreNamingConventionsVersion>10.0.1</EfCoreNamingConventionsVersion>
     <MicrosoftExtensionsHttpVersion>10.0.0</MicrosoftExtensionsHttpVersion>
     <MicrosoftExtensionsOptionsConfigurationExtensionsVersion>10.0.0</MicrosoftExtensionsOptionsConfigurationExtensionsVersion>
+    <MicrosoftExtensionsOptionsDataAnnotationsVersion>10.0.0</MicrosoftExtensionsOptionsDataAnnotationsVersion>
     <MicrosoftExtensionsDependencyInjectionAbstractionsVersion>10.0.0</MicrosoftExtensionsDependencyInjectionAbstractionsVersion>
     <MicrosoftOpenApiVersion>10.0.9</MicrosoftOpenApiVersion>
     <GrpcAspNetCoreServerVersion>2.66.0</GrpcAspNetCoreServerVersion>
