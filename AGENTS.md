@@ -91,6 +91,14 @@ idempotent: it locks on the payment id, checks amount/currency against the store
 `IPaymentFulfillment` (subscription activation/extension, token pack credit, ledger row) runs in the
 same transaction as the status change. Don't branch on a provider code anywhere outside the provider.
 
+`WebApiHost` exposes the providers' public addresses in `PaymentsController`, generic over the provider in the
+route: `/api/payments/{provider}/notify` (GET or POST, the answer body is the provider's acknowledgement),
+`/success` and `/fail` (redirect the customer to `Payments:Redirects:SuccessUrl`/`FailUrl` - the success page
+proves nothing, only a notification pays). Providers are registered in `WebApiServices`'
+`AddWebApiServices(configuration)`; options are validated lazily, on first use. Configure
+`Payments:Robokassa` (`MerchantLogin`, passwords, `IsTest: false` in production) via secrets; the
+Robokassa shop settings must point ResultURL/SuccessURL/FailURL to these addresses.
+
 **Log generously at Information** in everything payment-related (the `WebApiHost` runs at Information in
 production): every decision and state change with the ids needed to follow one payment end to end
 (`PaymentId`, provider payment id, paid entity, amounts, statuses), plus a Warning for every refusal.
