@@ -122,6 +122,12 @@ Solution: `Laraue.Apps.Billing.sln`
 - `src/Laraue.Apps.Billing.Internal.Contracts` - the `.proto` service-to-service contract other apps
   will consume plus its generated stubs (see "What this project is" above). No implementation, no
   DB/ASP.NET dependencies - kept minimal so it could be shared as a package.
+- `src/Laraue.Apps.Billing.Payments.Robokassa` - the Robokassa `IPaymentProvider` (checkout link,
+  signatures, result notification parsing) and `AddRobokassaPaymentProvider(configuration)`, which binds
+  `Payments:Robokassa` (`RobokassaOptions`). References only `Services`; a host registers it. We never send
+  an `InvId`: Robokassa assigns it, it comes back in the result notification and is stored as
+  `Payment.ProviderPaymentId`; our payment id travels as the custom `Shp_paymentId` parameter, which
+  Robokassa echoes and signs. Another provider = another project like this one, nothing else changes.
 - `src/Laraue.Apps.Billing.Services` - **core** business logic shared across hosts, not tied to any
   one of them (`CoreTariffService`, `SubscriptionService`, ...), plus `Resources/Errors.resx` for
   user-facing error text. "Core" here means: does all the actual computation, but no host-facing

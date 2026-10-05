@@ -25,6 +25,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\..\src\Laraue.Apps.Billing.WebApiHost\Laraue.Apps.Billing.WebApiHost.csproj" />
+      <ProjectReference Include="..\..\src\Laraue.Apps.Billing.Payments.Robokassa\Laraue.Apps.Billing.Payments.Robokassa.csproj" />
     </ItemGroup>
 
     <ItemGroup>
