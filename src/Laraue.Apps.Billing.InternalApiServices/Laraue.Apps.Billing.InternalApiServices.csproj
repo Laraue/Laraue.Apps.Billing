@@ -8,6 +8,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Laraue.Apps.Billing.Services\Laraue.Apps.Billing.Services.csproj" />
+      <ProjectReference Include="..\Laraue.Apps.Billing.Payments.Robokassa\Laraue.Apps.Billing.Payments.Robokassa.csproj" />
       <ProjectReference Include="..\Laraue.Apps.Billing.Internal.Contracts\Laraue.Apps.Billing.Internal.Contracts.csproj" />
     </ItemGroup>
 

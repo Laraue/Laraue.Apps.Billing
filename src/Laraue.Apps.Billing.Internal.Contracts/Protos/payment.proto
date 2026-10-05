@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+option csharp_namespace = "Laraue.Apps.Billing.Internal.Contracts";
+package laraue.apps.billing.internal.v1;
+
+// Service-to-service contract for starting a payment. The caller names what the customer buys and
+// gets back the address to send them to; which payment provider is behind it is Billing's business
+// and never appears here. The price is always Billing's own, the caller cannot set an amount.
+// Whether the payment succeeded is learned by the caller the usual way - the subscription and
+// token balance rpcs - since the provider reports it to Billing, not to the caller.
+//
+// Split into personal/organization rpcs for the same reason as subscription.proto: this service has
+// no User/Organization tables of its own and cannot otherwise tell which kind of tariff is meant.
+// Which service is calling is identified by the "x-laraue-service-id" metadata header, as in
+// token.proto. An unknown item, or one that is not for sale to that kind of payer, is
+// INVALID_ARGUMENT.
+service PaymentService {
+  rpc CreatePersonalCheckout (CreatePersonalCheckoutRequest) returns (CreateCheckoutResponse);
+  rpc CreateOrganizationCheckout (CreateOrganizationCheckoutRequest) returns (CreateCheckoutResponse);
+}
+
+enum PaymentItemKind {
+  PAYMENT_ITEM_KIND_UNSPECIFIED = 0;
+  PAYMENT_ITEM_KIND_SUBSCRIPTION = 1;
+  PAYMENT_ITEM_KIND_TOKEN_PACK = 2;
+}
+
+message CreatePersonalCheckoutRequest {
+  // The user who pays and is covered by the purchase.
+  string user_id = 1;
+  PaymentItemKind kind = 2;
+  // Tariff id for a subscription, token pack id for a token pack.
+  string item_id = 3;
+  // ISO 4217 code the customer pays in, e.g. "RUB".
+  string currency_code = 4;
+  // Where to return the customer after paying, when the provider supports it. Optional.
+  string return_url = 5;
+}
+
+message CreateOrganizationCheckoutRequest {
+  // The organization covered by the purchase.
+  string organization_id = 1;
+  // The user who pays.
+  string user_id = 2;
+  PaymentItemKind kind = 3;
+  string item_id = 4;
+  string currency_code = 5;
+  string return_url = 6;
+}
+
+message CreateCheckoutResponse {
+  string payment_id = 1;
+  // The address to send the customer to in order to pay.
+  string url = 2;
+}

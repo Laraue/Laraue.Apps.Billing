@@ -99,6 +99,12 @@ proves nothing, only a notification pays). Providers are registered in `WebApiSe
 `Payments:Robokassa` (`MerchantLogin`, passwords, `IsTest: false` in production) via secrets; the
 Robokassa shop settings must point ResultURL/SuccessURL/FailURL to these addresses.
 
+Other services start a payment over gRPC (`payment.proto`: `CreatePersonalCheckout`/`CreateOrganizationCheckout`,
+implemented by `InternalApiServices.PaymentGrpcService` over `ICorePaymentService.CreateAsync`): they name the
+item and get back the provider's URL, never an amount or a provider. `AddPaymentServices(configuration)`
+(in `Services`) registers the provider-agnostic part and is shared by both hosts; each host adds the provider it
+uses next to it.
+
 **Log generously at Information** in everything payment-related (the `WebApiHost` runs at Information in
 production): every decision and state change with the ids needed to follow one payment end to end
 (`PaymentId`, provider payment id, paid entity, amounts, statuses), plus a Warning for every refusal.
