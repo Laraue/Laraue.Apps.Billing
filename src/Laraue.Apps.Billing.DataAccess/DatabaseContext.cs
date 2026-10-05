@@ -43,6 +43,12 @@ public class DatabaseContext : DbContext, IJobsDbContext
 
     #endregion
 
+    #region Payments
+
+    public required DbSet<Payment> Payments { get; set; }
+
+    #endregion
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // JobStateEntity ships from Laraue.Core.Extensions.Hosting.EfCore with no key convention
@@ -132,5 +138,29 @@ public class DatabaseContext : DbContext, IJobsDbContext
         modelBuilder.Entity<TokenTransaction>()
             .HasIndex(x => new { x.PaidEntityId, x.CreatedAt, x.Id })
             .IsDescending(false, true, true);
+
+        modelBuilder.Entity<Payment>(builder =>
+        {
+            builder
+                .HasOne<Tariff>()
+                .WithMany()
+                .HasForeignKey(x => x.TariffId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder
+                .HasOne<TokenPack>()
+                .WithMany()
+                .HasForeignKey(x => x.TokenPackId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // A provider's notification finds the payment by its own reference. Rows without a
+            // reference yet are not constrained, Postgres treats NULLs as distinct.
+            builder
+                .HasIndex(x => new { x.Provider, x.ProviderPaymentId })
+                .IsUnique();
+
+            // Payment history of a user or an organization.
+            builder.HasIndex(x => new { x.PaidEntityId, x.CreatedAt });
+        });
     }
 }

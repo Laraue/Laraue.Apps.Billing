@@ -64,6 +64,12 @@ apps (`Laraue.Apps.Boards`) can reference it - see "NuGet publishing" below.
   The monthly top-up writes a `TariffGrant` ledger row (the net change), because
   `TokenTransactionReason` is mirrored in the published gRPC contract and a new value would need a
   contracts release.
+- `Payment` - a customer's attempt to pay for a tariff or a token pack (`Kind`), in minor units of
+  `CurrencyCode`, with a `Status` (Pending/Paid/Failed/Canceled). Provider-agnostic on purpose: the
+  provider is a string code (`Provider`), and its own references live only in `ProviderPaymentId`
+  (unique per provider, opaque) and `ProviderData` (jsonb, read/written only by that provider's
+  code). Never add a column for one provider's quirk (e.g. an integer invoice number) - keep it in
+  those two fields, so replacing a provider needs no schema change.
 - `TokenTransaction` - the append-only ledger of token spend (`Status`
   Started/Canceled/Confirmed, `Reason` TariffGrant/DailyGrant/Purchase/Expiry), linked to which
   purchased pack(s) and/or subscription pack it drew from via
