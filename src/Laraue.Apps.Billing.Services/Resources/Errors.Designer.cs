@@ -103,5 +103,68 @@ namespace Laraue.Apps.Billing.Services.Resources {
                 return ResourceManager.GetString("TokenTransactionNotStarted", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Payment provider &apos;{0}&apos; was not found..
+        /// </summary>
+        internal static string PaymentProviderNotFound {
+            get {
+                return ResourceManager.GetString("PaymentProviderNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Payment provider &apos;{0}&apos; does not support currency &apos;{1}&apos;..
+        /// </summary>
+        internal static string PaymentProviderCurrencyNotSupported {
+            get {
+                return ResourceManager.GetString("PaymentProviderCurrencyNotSupported", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No payment provider charges in currency &apos;{0}&apos;..
+        /// </summary>
+        internal static string PaymentCurrencyNotAvailable {
+            get {
+                return ResourceManager.GetString("PaymentCurrencyNotAvailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Item &apos;{0}&apos; was not found or is not for sale..
+        /// </summary>
+        internal static string PaymentItemNotFound {
+            get {
+                return ResourceManager.GetString("PaymentItemNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Payment &apos;{0}&apos; was not found..
+        /// </summary>
+        internal static string PaymentNotFound {
+            get {
+                return ResourceManager.GetString("PaymentNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Payment notification does not reference a payment..
+        /// </summary>
+        internal static string PaymentNotificationWithoutReference {
+            get {
+                return ResourceManager.GetString("PaymentNotificationWithoutReference", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Payment notification does not match payment &apos;{0}&apos; (amount or currency)..
+        /// </summary>
+        internal static string PaymentNotificationMismatch {
+            get {
+                return ResourceManager.GetString("PaymentNotificationMismatch", resourceCulture);
+            }
+        }
     }
 }

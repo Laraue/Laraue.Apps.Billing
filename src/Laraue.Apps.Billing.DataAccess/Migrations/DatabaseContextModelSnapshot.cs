@@ -224,6 +224,93 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.Payment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<long>("AmountMinorUnits")
+                        .HasColumnType("bigint")
+                        .HasColumnName("amount_minor_units");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("currency_code");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("paid_at");
+
+                    b.Property<Guid>("PaidEntityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("paid_entity_id");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("ProviderData")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("provider_data");
+
+                    b.Property<string>("ProviderPaymentId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("provider_payment_id");
+
+                    b.Property<int>("ServiceId")
+                        .HasColumnType("integer")
+                        .HasColumnName("service_id");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("TariffId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tariff_id");
+
+                    b.Property<Guid?>("TokenPackId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("token_pack_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_payments");
+
+                    b.HasIndex("TariffId")
+                        .HasDatabaseName("ix_payments_tariff_id");
+
+                    b.HasIndex("TokenPackId")
+                        .HasDatabaseName("ix_payments_token_pack_id");
+
+                    b.HasIndex("PaidEntityId", "CreatedAt")
+                        .HasDatabaseName("ix_payments_paid_entity_id_created_at");
+
+                    b.HasIndex("Provider", "ProviderPaymentId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_payments_provider_provider_payment_id");
+
+                    b.ToTable("payments", (string)null);
+                });
+
             modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.PurchasedTokenPack", b =>
                 {
                     b.Property<Guid>("Id")
@@ -749,6 +836,21 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasConstraintName("fk_markdown_translator_personal_tariffs_tariffs_id");
 
                     b.Navigation("Tariff");
+                });
+
+            modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.Payment", b =>
+                {
+                    b.HasOne("Laraue.Apps.Billing.DataAccess.Entities.Tariff", null)
+                        .WithMany()
+                        .HasForeignKey("TariffId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_payments_tariffs_tariff_id");
+
+                    b.HasOne("Laraue.Apps.Billing.DataAccess.Entities.TokenPack", null)
+                        .WithMany()
+                        .HasForeignKey("TokenPackId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_payments_token_packs_token_pack_id");
                 });
 
             modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.PurchasedTokenPack", b =>

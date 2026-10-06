@@ -145,6 +145,10 @@ public sealed record TokenTransactionItem
     public string? Error { get; init; }
 }
 
+/// <remarks>
+/// Reserving, committing, cancelling and reading a balance need a database transaction started by the
+/// caller (the host), which commits it. The service never opens one itself.
+/// </remarks>
 public class TokenService(
     DatabaseContext context,
     ISubscriptionService subscriptionService,
@@ -201,7 +205,7 @@ public class TokenService(
         var requested = (long)inputTokensCount + maxOutputTokensCount;
         var now = dateTimeProvider.UtcNow;
 
-        await using var dbTransaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        context.Database.EnsureTransactionStarted();
 
         // Serializes every reserve/commit/cancel for this paidEntityId - without it, two
         // concurrent reservations read the same pre-decrement balance, both pass the sufficiency
@@ -296,7 +300,6 @@ public class TokenService(
         context.TokenTransactions.Add(tokenTransaction);
 
         await context.SaveChangesAsync(cancellationToken);
-        await dbTransaction.CommitAsync(cancellationToken);
 
         return new ReservationResult { TokenTransactionId = tokenTransaction.Id };
     }
@@ -322,7 +325,8 @@ public class TokenService(
     /// <summary>
     /// Shared by <see cref="GetPersonalTokenBalanceAsync"/>/<see cref="GetOrganizationTokenBalanceAsync"/>
     /// - a read-only counterpart to <see cref="TryReserveTokensCoreAsync"/>'s balance lookup, minus
-    /// the draw-down/mutation. No lock/transaction needed since nothing is written here.
+    /// the draw-down/mutation. It can still write (it provisions the Free subscription of an entity that
+    /// has none), so the caller must have started a transaction.
     /// </summary>
     private async Task<TokenBalance> GetTokenBalanceCoreAsync(
         Guid paidEntityId,
@@ -412,7 +416,7 @@ public class TokenService(
         int actualOutputTokensCount,
         CancellationToken cancellationToken)
     {
-        await using var dbTransaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        context.Database.EnsureTransactionStarted();
 
         var tokenTransaction = await GetStartedTransactionOrThrowAsync(tokenTransactionId, cancellationToken);
 
@@ -429,7 +433,6 @@ public class TokenService(
         tokenTransaction.Delta = -actualSpent;
 
         await context.SaveChangesAsync(cancellationToken);
-        await dbTransaction.CommitAsync(cancellationToken);
     }
 
     public async Task CancelTokensReservationAsync(
@@ -437,7 +440,7 @@ public class TokenService(
         string error,
         CancellationToken cancellationToken)
     {
-        await using var dbTransaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        context.Database.EnsureTransactionStarted();
 
         var tokenTransaction = await GetStartedTransactionOrThrowAsync(tokenTransactionId, cancellationToken);
 
@@ -449,7 +452,6 @@ public class TokenService(
         tokenTransaction.Error = error;
 
         await context.SaveChangesAsync(cancellationToken);
-        await dbTransaction.CommitAsync(cancellationToken);
     }
 
     /// <summary>

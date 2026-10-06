@@ -27,7 +27,7 @@ public static class WebApplicationBuilderExtensions
         public WebApplicationBuilder AddApplicationServices()
         {
             builder.Services.AddScoped<ExceptionHandleMiddleware>();
-            builder.Services.AddWebApiServices();
+            builder.Services.AddWebApiServices(builder.Configuration);
 
             builder.Services
                 .AddControllers()

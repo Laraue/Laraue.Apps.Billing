@@ -6,7 +6,7 @@
     <PackageProjectUrl>https://github.com/win7user10/Laraue.Apps.Billing</PackageProjectUrl>
     <!-- Designate all projects as non-package projects by default -->
     <IsPackable>false</IsPackable>
-    <Version>0.0.6</Version>
+    <Version>0.0.7</Version>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -25,6 +25,8 @@
     <NpgsqlEfCoreVersion>10.0.0</NpgsqlEfCoreVersion>
     <EfCoreNamingConventionsVersion>10.0.1</EfCoreNamingConventionsVersion>
     <MicrosoftExtensionsHttpVersion>10.0.0</MicrosoftExtensionsHttpVersion>
+    <MicrosoftExtensionsOptionsConfigurationExtensionsVersion>10.0.0</MicrosoftExtensionsOptionsConfigurationExtensionsVersion>
+    <MicrosoftExtensionsOptionsDataAnnotationsVersion>10.0.0</MicrosoftExtensionsOptionsDataAnnotationsVersion>
     <MicrosoftExtensionsDependencyInjectionAbstractionsVersion>10.0.0</MicrosoftExtensionsDependencyInjectionAbstractionsVersion>
     <MicrosoftOpenApiVersion>10.0.9</MicrosoftOpenApiVersion>
     <GrpcAspNetCoreServerVersion>2.66.0</GrpcAspNetCoreServerVersion>

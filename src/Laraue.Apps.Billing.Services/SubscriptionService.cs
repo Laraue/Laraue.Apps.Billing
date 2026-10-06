@@ -53,6 +53,10 @@ public interface ISubscriptionService
         CancellationToken cancellationToken);
 }
 
+/// <remarks>
+/// Every method can provision a Free subscription, so each needs a database transaction started by
+/// the caller (the host), which commits it. The service never opens one itself.
+/// </remarks>
 public class SubscriptionService(DatabaseContext context, IDateTimeProvider dateTimeProvider) : ISubscriptionService
 {
     public Task<ActiveSubscription> GetActivePersonalSubscriptionAsync(
@@ -108,94 +112,72 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
         bool isOrganization,
         CancellationToken cancellationToken)
     {
-        // May already be running inside a caller's transaction (e.g. TokenService's reserve path,
-        // which needs this provisioning + its own balance mutation to commit atomically together)
-        // or may be the only write happening (e.g. a bare "what's my plan" read-path call) - only
-        // own the transaction's lifecycle when nobody else already does.
-        var ownsTransaction = context.Database.CurrentTransaction is null;
-        var dbTransaction = ownsTransaction
-            ? await context.Database.BeginTransactionAsync(cancellationToken)
-            : null;
+        context.Database.EnsureTransactionStarted();
 
-        try
+        // Reentrant per session/key - a no-op if the caller (e.g. TokenService) already holds
+        // this same lock, so this doesn't double-wait when called from inside its transaction.
+        await context.Database.PgAdvisoryXactLock(paidEntityId.ToString(), cancellationToken);
+
+        var now = dateTimeProvider.UtcNow;
+
+        var existingId = await GetActiveSubscriptionsQuery(serviceId, paidEntityId)
+            .Select(s => (Guid?)s.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        Guid subscriptionId;
+        Guid tariffId;
+        BalanceSubscriptionToken balance;
+
+        if (existingId is { } id)
         {
-            // Reentrant per session/key - a no-op if the caller (e.g. TokenService) already holds
-            // this same lock, so this doesn't double-wait when called from inside its transaction.
-            await context.Database.PgAdvisoryXactLock(paidEntityId.ToString(), cancellationToken);
-
-            var now = dateTimeProvider.UtcNow;
-
-            var existingId = await GetActiveSubscriptionsQuery(serviceId, paidEntityId)
-                .Select(s => (Guid?)s.Id)
-                .SingleOrDefaultAsync(cancellationToken);
-
-            Guid subscriptionId;
-            Guid tariffId;
-            BalanceSubscriptionToken balance;
-
-            if (existingId is { } id)
-            {
-                subscriptionId = id;
-                tariffId = await context.Subscriptions
-                    .Where(s => s.Id == id)
-                    .Select(s => s.TariffId)
-                    .SingleAsync(cancellationToken);
-                balance = await context.BalanceSubscriptionTokens
-                    .SingleAsync(b => b.SubscriptionId == id, cancellationToken);
-            }
-            else
-            {
-                tariffId = await GetFreeTariffIdAsync(serviceId, isOrganization, cancellationToken)
-                    ?? throw new BadRequestException(
-                        nameof(serviceId),
-                        string.Format(Errors.UnknownService, serviceId));
-
-                subscriptionId = Guid.NewGuid();
-
-                context.Subscriptions.Add(new SubscriptionEntity
-                {
-                    Id = subscriptionId,
-                    ServiceId = serviceId,
-                    TariffId = tariffId,
-                    OwnerId = paidEntityId,
-                    PaidEntityId = paidEntityId,
-                    Status = SubscriptionStatus.Active,
-                    CurrentPeriodStartedAt = now,
-                    // Free is BillingPeriod.Forever - null instead of a real renewal date, since
-                    // this is a one-time provision with nothing to renew.
-                    CurrentPeriodFinishesAt = null,
-                });
-
-                // Starts empty: a Free tariff's tokens are its recurring free allowance, granted by
-                // the top-ups below (which also write the ledger row), not a one-time grant.
-                balance = new BalanceSubscriptionToken
-                {
-                    SubscriptionId = subscriptionId,
-                    SubscriptionTokensCount = 0,
-                    FreeTokensCount = 0,
-                };
-                context.BalanceSubscriptionTokens.Add(balance);
-            }
-
-            await ApplyDailyGrantTopUpIfNeededAsync(tariffId, paidEntityId, balance, now, cancellationToken);
-            await ApplyMonthlyGrantTopUpIfNeededAsync(tariffId, paidEntityId, balance, now, cancellationToken);
-
-            await context.SaveChangesAsync(cancellationToken);
-
-            if (ownsTransaction)
-            {
-                await dbTransaction!.CommitAsync(cancellationToken);
-            }
-
-            return subscriptionId;
+            subscriptionId = id;
+            tariffId = await context.Subscriptions
+                .Where(s => s.Id == id)
+                .Select(s => s.TariffId)
+                .SingleAsync(cancellationToken);
+            balance = await context.BalanceSubscriptionTokens
+                .SingleAsync(b => b.SubscriptionId == id, cancellationToken);
         }
-        finally
+        else
         {
-            if (dbTransaction is not null)
+            tariffId = await GetFreeTariffIdAsync(serviceId, isOrganization, cancellationToken)
+                ?? throw new BadRequestException(
+                    nameof(serviceId),
+                    string.Format(Errors.UnknownService, serviceId));
+
+            subscriptionId = Guid.NewGuid();
+
+            context.Subscriptions.Add(new SubscriptionEntity
             {
-                await dbTransaction.DisposeAsync();
-            }
+                Id = subscriptionId,
+                ServiceId = serviceId,
+                TariffId = tariffId,
+                OwnerId = paidEntityId,
+                PaidEntityId = paidEntityId,
+                Status = SubscriptionStatus.Active,
+                CurrentPeriodStartedAt = now,
+                // Free is BillingPeriod.Forever - null instead of a real renewal date, since
+                // this is a one-time provision with nothing to renew.
+                CurrentPeriodFinishesAt = null,
+            });
+
+            // Starts empty: a Free tariff's tokens are its recurring free allowance, granted by
+            // the top-ups below (which also write the ledger row), not a one-time grant.
+            balance = new BalanceSubscriptionToken
+            {
+                SubscriptionId = subscriptionId,
+                SubscriptionTokensCount = 0,
+                FreeTokensCount = 0,
+            };
+            context.BalanceSubscriptionTokens.Add(balance);
         }
+
+        await ApplyDailyGrantTopUpIfNeededAsync(tariffId, paidEntityId, balance, now, cancellationToken);
+        await ApplyMonthlyGrantTopUpIfNeededAsync(tariffId, paidEntityId, balance, now, cancellationToken);
+
+        await context.SaveChangesAsync(cancellationToken);
+
+        return subscriptionId;
     }
 
     /// <summary>

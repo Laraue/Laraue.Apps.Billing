@@ -64,6 +64,12 @@ apps (`Laraue.Apps.Boards`) can reference it - see "NuGet publishing" below.
   The monthly top-up writes a `TariffGrant` ledger row (the net change), because
   `TokenTransactionReason` is mirrored in the published gRPC contract and a new value would need a
   contracts release.
+- `Payment` - a customer's attempt to pay for a tariff or a token pack (`Kind`), in minor units of
+  `CurrencyCode`, with a `Status` (Pending/Paid/Failed/Canceled). Provider-agnostic on purpose: the
+  provider is a string code (`Provider`), and its own references live only in `ProviderPaymentId`
+  (unique per provider, opaque) and `ProviderData` (jsonb, read/written only by that provider's
+  code). Never add a column for one provider's quirk (e.g. an integer invoice number) - keep it in
+  those two fields, so replacing a provider needs no schema change.
 - `TokenTransaction` - the append-only ledger of token spend (`Status`
   Started/Canceled/Confirmed, `Reason` TariffGrant/DailyGrant/Purchase/Expiry), linked to which
   purchased pack(s) and/or subscription pack it drew from via
@@ -73,6 +79,87 @@ All reference data (`Service`, `Tariff` + its per-service joins, `TokenPack`, `C
 seeded via EF Core `HasData` in `DatabaseContext.OnModelCreating`, sourced from the static classes
 in `DataAccess/Data/*Data.cs` - there's no admin UI or seeding script; changing a tariff or adding a
 currency means editing the relevant `*Data.cs` class and adding a migration.
+
+## Payments
+
+Provider-agnostic, in `Services/Payments`. Everything provider-specific sits behind `IPaymentProvider`
+(checkout link, notification verification/parsing, the acknowledgement body); a provider is its own
+project that registers an `IPaymentProvider`, and `Payments:DefaultProvider` picks the one new
+checkouts use. `ICorePaymentService.CreateAsync` prices the item from our own tariffs/packs (never from
+the caller), stores a Pending `Payment` and returns the provider's link. `HandleNotificationAsync` is
+idempotent: it locks on the payment id, checks amount/currency against the stored payment, and
+`IPaymentFulfillment` (subscription activation/extension, token pack credit, ledger row) runs in the
+same transaction as the status change. Don't branch on a provider code anywhere outside the provider.
+
+`WebApiHost` exposes the providers' public addresses in `PaymentsController`, generic over the provider in the
+route: `/api/payments/{provider}/notify` (GET or POST, the answer body is the provider's acknowledgement),
+`/success` and `/fail` (redirect the customer to the pages of the service the payment belongs to,
+`Payments:Redirects:Services:{ServiceId}`, or to the global `Payments:Redirects:SuccessUrl`/`FailUrl` when the
+payment cannot be identified - the success page proves nothing, only a notification pays). Providers are registered in `WebApiServices`'
+`AddWebApiServices(configuration)`; options are validated lazily, on first use. Configure
+`Payments:Robokassa` (`MerchantLogin`, passwords, `IsTest: false` in production) via secrets; the
+Robokassa shop settings must point ResultURL/SuccessURL/FailURL to these addresses.
+
+**Callback design.** One generic `PaymentsController` handles every provider's callbacks, with the provider
+code in the route. A model binder (`PaymentCallbackModelBinder`, `[FromPaymentCallback]`) turns a request into a
+provider-neutral `PaymentCallback` (provider, query and form values merged into `Parameters`, headers, raw `Body`
+for a non-form request); the controller only passes it to `IPaymentsService`. `PaymentsService` (host layer) opens
+the transaction around `ICorePaymentService.HandleNotificationAsync` and commits it, because core services only
+require a started transaction. The provider alone knows its protocol: `ParseNotification` verifies the signature
+and returns a provider-neutral `PaymentNotification`, `TryGetReturnedPaymentId` reads our payment id from a
+customer's return, `CreateNotificationAck` builds the answer. A new provider is an `IPaymentProvider`, no web code.
+
+This is a deliberate trade-off, not the only possible design. The `Parameters`/`Headers`/`Body` bag fits
+Robokassa (form or query fields) but is the part that bends for a provider with another protocol, e.g. a JSON
+webhook signed over the raw body. The alternative is a controller per provider that parses its own protocol and
+hands the core a `PaymentNotification`; it removes the generic bag and the binder, but needs web code per provider
+(a web-facing provider project, or provider knowledge in `WebApiHost`) and a shared helper for the transaction and
+redirect steps. Switch to it when a provider no longer fits the bag, not before.
+
+Other services start a payment over gRPC (`payment.proto`: `CreatePersonalCheckout`/`CreateOrganizationCheckout`,
+implemented by `InternalApiServices.PaymentGrpcService` over `ICorePaymentService.CreateAsync`): they name the
+item and get back the provider's URL, never an amount or a provider. `AddPaymentServices(configuration)`
+(in `Services`) registers the provider-agnostic part and is shared by both hosts; each host adds the provider it
+uses next to it.
+
+**Log generously at Information** in everything payment-related (the `WebApiHost` runs at Information in
+production): every decision and state change with the ids needed to follow one payment end to end
+(`PaymentId`, provider payment id, paid entity, amounts, statuses), plus a Warning for every refusal.
+Use `ILogger<T>` and structured templates. Never log secrets: a provider logs notification parameter
+*names*, not values, since they carry its signature, and never its passwords or keys.
+
+## Adding a product
+
+A new product is a new `ServiceId`. Everything provider- and currency-related is already generic (any
+service is priced and paid through the same code); what is per product is below. Do all of it - the
+`ServiceOnboardingTests` theory runs over every `ServiceId` and fails for a product that has no paid
+tariffs, a tariff that `TariffService` cannot map, or tariffs `CorePaymentService` does not recognise.
+
+1. `DataAccess`: the `ServiceId` value (`Entities/Service.cs`), its row in `Data/ServicesData.cs`, a
+   `{Service}PersonalTariff` (and `{Service}TeamTariff` when it sells team plans) entity with its
+   `DbSet`/mapping in `DatabaseContext`, the tariffs in `Data/{Service}TariffsData.cs` (at least one
+   paid one) and a migration. Free allowances need a `BalanceSubscriptionToken` rule, see "Free
+   allowances" above.
+2. Reading tariffs: the `Core{Service}...Tariff` records and their loading in `CoreTariffService`, and
+   the mapping to the public `{Service}...Subscription` types in `WebApiServices/TariffService`.
+3. Paying: add the service to the item check in `CorePaymentService.GetTariffItemAsync` (the switch
+   on `ServiceId`, personal and team tables). A service missing there can never be bought.
+4. gRPC: the service in `subscription.proto` (its `ServiceId` value, the `oneof` payload message),
+   `GrpcParsing.ReadDomainServiceId`, `SubscriptionGrpcService` and `SubscriptionService`
+   (the active subscription of the service). Changing the `.proto` needs a NuGet release of
+   `Laraue.Apps.Billing.Internal.Contracts` - see "NuGet publishing".
+5. Config: `Payments:Redirects:Services:{ServiceId}` with that product's `SuccessUrl`/`FailUrl`. The checked-in
+   `appsettings.json` points them at the local frontend (`http://localhost:3000/...`), like `IsTest: true`;
+   production sets the real addresses in its own configuration. The
+   provider sends every customer back to the one `/api/payments/{provider}/success|fail` address;
+   Billing finds the payment from the returned parameters and redirects to its service's pages. A
+   service without an entry falls back to the global `SuccessUrl`/`FailUrl` - fine only for the first
+   product. The provider's shop settings keep pointing at Billing, never at a product.
+6. The product's own backend calls Billing with the `x-laraue-service-id` header and its own tariff
+   ids; the checkout currency is one Billing offers (`GET /api/tariffs` returns tariffs only in
+   currencies a registered provider charges in).
+7. Not per product yet: the default provider and the provider credentials (one Robokassa shop). A
+   product that needs its own shop or provider needs per-service provider settings first.
 
 ## Pricing/currency conversion
 
@@ -99,6 +186,12 @@ Solution: `Laraue.Apps.Billing.sln`
 - `src/Laraue.Apps.Billing.Internal.Contracts` - the `.proto` service-to-service contract other apps
   will consume plus its generated stubs (see "What this project is" above). No implementation, no
   DB/ASP.NET dependencies - kept minimal so it could be shared as a package.
+- `src/Laraue.Apps.Billing.Payments.Robokassa` - the Robokassa `IPaymentProvider` (checkout link,
+  signatures, result notification parsing) and `AddRobokassaPaymentProvider(configuration)`, which binds
+  `Payments:Robokassa` (`RobokassaOptions`). References only `Services`; a host registers it. We never send
+  an `InvId`: Robokassa assigns it, it comes back in the result notification and is stored as
+  `Payment.ProviderPaymentId`; our payment id travels as the custom `Shp_paymentId` parameter, which
+  Robokassa echoes and signs. Another provider = another project like this one, nothing else changes.
 - `src/Laraue.Apps.Billing.Services` - **core** business logic shared across hosts, not tied to any
   one of them (`CoreTariffService`, `SubscriptionService`, ...), plus `Resources/Errors.resx` for
   user-facing error text. "Core" here means: does all the actual computation, but no host-facing
@@ -199,6 +292,13 @@ the `Core*` record that also applies `PriceCalculator` to the raw `Price` column
 has to happen client-side since `PriceCalculator`'s rounding isn't SQL-translatable). A host's
 `*Services` project then maps those already-priced `Core*` records 1:1 onto its own response shape
 (see `WebApiServices.TariffService`) - EF Core itself is never queried outside `Services`.
+
+**Transactions belong to the host.** A core service in `Services` never opens a transaction: one that
+writes several rows or takes `PgAdvisoryXactLock` starts with `context.Database.EnsureTransactionStarted()`
+and leaves the lifecycle to its caller. The host (gRPC service, `WebApiServices`, a job) runs the call
+through `context.Database.InTransactionAsync(...)`, which commits on success and rolls back on an
+exception. Tests that call a core service directly do the same through `InTransaction(...)` of
+`BillingIntegrationTest`.
 
 ## Testing
 

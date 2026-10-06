@@ -9,6 +9,7 @@ public static class DbExtensions
     {
         // Deletion order respects FK direction: children before the parents they point at.
         // Reference/seed data (Tariffs, TokenPacks, CurrencyRates, Services) is left untouched.
+        dbContext.Payments.ExecuteDelete();
         dbContext.TokenTransactionPurchasedTokenPacks.ExecuteDelete();
         dbContext.TokenTransactions.ExecuteDelete();
         dbContext.TokenTransactionSubscriptionTokenPacks.ExecuteDelete();

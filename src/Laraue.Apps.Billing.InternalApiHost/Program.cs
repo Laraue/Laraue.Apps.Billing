@@ -39,7 +39,7 @@ public sealed class Program
             .UseNpgsql(connection)
             .UseSnakeCaseNamingConvention());
 
-        builder.Services.AddInternalApiServices();
+        builder.Services.AddInternalApiServices(builder.Configuration);
 
         builder.Services
             .AddGrpc()
@@ -64,6 +64,7 @@ public sealed class Program
 
         app.MapGrpcService<SubscriptionGrpcService>();
         app.MapGrpcService<TokenGrpcService>();
+        app.MapGrpcService<PaymentGrpcService>();
         app.MapHealthChecks("/_health");
         app.MapPrometheusScrapingEndpoint("/_metrics");
 

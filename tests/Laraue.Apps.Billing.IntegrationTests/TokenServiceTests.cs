@@ -29,6 +29,13 @@ public class TokenServiceTests : BillingIntegrationTest
     }
 
     [Fact]
+    public async Task TryReservePersonalTokensAsync_ShouldRequireATransactionStartedByTheCaller()
+    {
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _tokenService.TryReservePersonalTokensAsync(
+            ServiceId.LaraueBoards, Guid.NewGuid(), inputTokensCount: 1, maxOutputTokensCount: 1, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task TryReservePersonalTokensAsync_ShouldReserveFromSubscriptionFirst_WhenBothBalancesAvailable()
     {
         var paidEntityId = Guid.NewGuid();
@@ -36,8 +43,8 @@ public class TokenServiceTests : BillingIntegrationTest
         await SeedPurchasedPackAsync(paidEntityId, SmallPackId, DateTime.UtcNow.AddDays(30));
         await SetPurchasedBalanceAsync(paidEntityId, 100_000);
 
-        var result = await _tokenService.TryReservePersonalTokensAsync(
-            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None);
+        var result = await InTransaction(() => _tokenService.TryReservePersonalTokensAsync(
+            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None));
 
         Assert.Null(result.Error);
         Assert.NotNull(result.TokenTransactionId);
@@ -65,8 +72,8 @@ public class TokenServiceTests : BillingIntegrationTest
         await SeedPurchasedPackAsync(paidEntityId, SmallPackId, DateTime.UtcNow.AddDays(10));
         await SetPurchasedBalanceAsync(paidEntityId, 700_000);
 
-        var result = await _tokenService.TryReservePersonalTokensAsync(
-            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 1000, CancellationToken.None);
+        var result = await InTransaction(() => _tokenService.TryReservePersonalTokensAsync(
+            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 1000, CancellationToken.None));
 
         Assert.Null(result.Error);
 
@@ -90,8 +97,8 @@ public class TokenServiceTests : BillingIntegrationTest
 
         // A brand-new paidEntityId now auto-provisions onto Free (2,500,000 tokens granted) on
         // first touch, so a request has to exceed even that grant to legitimately be insufficient.
-        var result = await _tokenService.TryReservePersonalTokensAsync(
-            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 2_000_000, maxOutputTokensCount: 2_000_000, CancellationToken.None);
+        var result = await InTransaction(() => _tokenService.TryReservePersonalTokensAsync(
+            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 2_000_000, maxOutputTokensCount: 2_000_000, CancellationToken.None));
 
         Assert.Null(result.TokenTransactionId);
         Assert.NotNull(result.Error);
@@ -116,10 +123,10 @@ public class TokenServiceTests : BillingIntegrationTest
             otherContext, new SubscriptionService(otherContext, otherDateTimeProvider), otherDateTimeProvider);
 
         var results = await Task.WhenAll(
-            _tokenService.TryReservePersonalTokensAsync(
-                ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 550, CancellationToken.None),
-            otherTokenService.TryReservePersonalTokensAsync(
-                ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 550, CancellationToken.None));
+            InTransaction(() => _tokenService.TryReservePersonalTokensAsync(
+                ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 550, CancellationToken.None)),
+            otherContext.Database.InTransactionAsync(() => otherTokenService.TryReservePersonalTokensAsync(
+                ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 550, CancellationToken.None)));
 
         Assert.Single(results, r => r.Error is null);
         Assert.Single(results, r => r.Error is not null);
@@ -133,8 +140,8 @@ public class TokenServiceTests : BillingIntegrationTest
     {
         var userId = Guid.NewGuid();
 
-        var result = await _tokenService.TryReservePersonalTokensAsync(
-            ServiceId.LaraueBoards, userId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None);
+        var result = await InTransaction(() => _tokenService.TryReservePersonalTokensAsync(
+            ServiceId.LaraueBoards, userId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None));
 
         Assert.Null(result.Error);
         Assert.NotNull(result.TokenTransactionId);
@@ -155,8 +162,8 @@ public class TokenServiceTests : BillingIntegrationTest
     {
         var organizationId = Guid.NewGuid();
 
-        var result = await _tokenService.TryReserveOrganizationTokensAsync(
-            ServiceId.LaraueBoards, organizationId, Guid.NewGuid(), inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None);
+        var result = await InTransaction(() => _tokenService.TryReserveOrganizationTokensAsync(
+            ServiceId.LaraueBoards, organizationId, Guid.NewGuid(), inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None));
 
         Assert.Null(result.Error);
 
@@ -175,8 +182,8 @@ public class TokenServiceTests : BillingIntegrationTest
         await SeedActiveSubscriptionAsync(organizationId, freeTokens: 1000, subscriptionTokens: 0);
         var actingUserId = Guid.NewGuid();
 
-        var result = await _tokenService.TryReserveOrganizationTokensAsync(
-            ServiceId.LaraueBoards, organizationId, actingUserId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None);
+        var result = await InTransaction(() => _tokenService.TryReserveOrganizationTokensAsync(
+            ServiceId.LaraueBoards, organizationId, actingUserId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None));
 
         var tokenTransaction = await Context.TokenTransactions.SingleAsync(t => t.Id == result.TokenTransactionId);
         Assert.Equal(organizationId, tokenTransaction.PaidEntityId);
@@ -189,10 +196,10 @@ public class TokenServiceTests : BillingIntegrationTest
         var paidEntityId = Guid.NewGuid();
         await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 1000, subscriptionTokens: 0);
 
-        var result = await _tokenService.TryReservePersonalTokensAsync(
-            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 900, CancellationToken.None);
+        var result = await InTransaction(() => _tokenService.TryReservePersonalTokensAsync(
+            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 900, CancellationToken.None));
 
-        await _tokenService.CommitTokensSpentAsync(result.TokenTransactionId!.Value, actualOutputTokensCount: 100, CancellationToken.None);
+        await InTransaction(() => _tokenService.CommitTokensSpentAsync(result.TokenTransactionId!.Value, actualOutputTokensCount: 100, CancellationToken.None));
 
         var subscriptionBalance = await Context.BalanceSubscriptionTokens.SingleAsync();
         Assert.Equal(800, subscriptionBalance.FreeTokensCount);
@@ -209,10 +216,10 @@ public class TokenServiceTests : BillingIntegrationTest
         var paidEntityId = Guid.NewGuid();
         await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 500, subscriptionTokens: 0);
 
-        var result = await _tokenService.TryReservePersonalTokensAsync(
-            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 400, CancellationToken.None);
+        var result = await InTransaction(() => _tokenService.TryReservePersonalTokensAsync(
+            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 400, CancellationToken.None));
 
-        await _tokenService.CommitTokensSpentAsync(result.TokenTransactionId!.Value, actualOutputTokensCount: 400, CancellationToken.None);
+        await InTransaction(() => _tokenService.CommitTokensSpentAsync(result.TokenTransactionId!.Value, actualOutputTokensCount: 400, CancellationToken.None));
 
         var subscriptionBalance = await Context.BalanceSubscriptionTokens.SingleAsync();
         Assert.Equal(0, subscriptionBalance.FreeTokensCount);
@@ -228,10 +235,10 @@ public class TokenServiceTests : BillingIntegrationTest
         var paidEntityId = Guid.NewGuid();
         await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 300, subscriptionTokens: 0);
 
-        var result = await _tokenService.TryReservePersonalTokensAsync(
-            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 50, maxOutputTokensCount: 250, CancellationToken.None);
+        var result = await InTransaction(() => _tokenService.TryReservePersonalTokensAsync(
+            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 50, maxOutputTokensCount: 250, CancellationToken.None));
 
-        await _tokenService.CancelTokensReservationAsync(result.TokenTransactionId!.Value, "timeout", CancellationToken.None);
+        await InTransaction(() => _tokenService.CancelTokensReservationAsync(result.TokenTransactionId!.Value, "timeout", CancellationToken.None));
 
         var subscriptionBalance = await Context.BalanceSubscriptionTokens.SingleAsync();
         Assert.Equal(300, subscriptionBalance.FreeTokensCount);
@@ -246,8 +253,8 @@ public class TokenServiceTests : BillingIntegrationTest
     [Fact]
     public async Task CommitTokensSpentAsync_ShouldThrowNotFoundException_WhenTransactionDoesNotExist()
     {
-        await Assert.ThrowsAsync<NotFoundException>(() => _tokenService.CommitTokensSpentAsync(
-            Guid.NewGuid(), actualOutputTokensCount: 1, CancellationToken.None));
+        await Assert.ThrowsAsync<NotFoundException>(() => InTransaction(() => _tokenService.CommitTokensSpentAsync(
+            Guid.NewGuid(), actualOutputTokensCount: 1, CancellationToken.None)));
     }
 
     [Fact]
@@ -256,12 +263,12 @@ public class TokenServiceTests : BillingIntegrationTest
         var paidEntityId = Guid.NewGuid();
         await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 100, subscriptionTokens: 0);
 
-        var result = await _tokenService.TryReservePersonalTokensAsync(
-            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 10, maxOutputTokensCount: 10, CancellationToken.None);
-        await _tokenService.CommitTokensSpentAsync(result.TokenTransactionId!.Value, actualOutputTokensCount: 10, CancellationToken.None);
+        var result = await InTransaction(() => _tokenService.TryReservePersonalTokensAsync(
+            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 10, maxOutputTokensCount: 10, CancellationToken.None));
+        await InTransaction(() => _tokenService.CommitTokensSpentAsync(result.TokenTransactionId!.Value, actualOutputTokensCount: 10, CancellationToken.None));
 
-        await Assert.ThrowsAsync<BadRequestException>(() => _tokenService.CancelTokensReservationAsync(
-            result.TokenTransactionId!.Value, "too late", CancellationToken.None));
+        await Assert.ThrowsAsync<BadRequestException>(() => InTransaction(() => _tokenService.CancelTokensReservationAsync(
+            result.TokenTransactionId!.Value, "too late", CancellationToken.None)));
     }
 
     [Fact]
@@ -272,8 +279,8 @@ public class TokenServiceTests : BillingIntegrationTest
         await SeedPurchasedPackAsync(paidEntityId, SmallPackId, DateTime.UtcNow.AddDays(30));
         await SetPurchasedBalanceAsync(paidEntityId, 100_000);
 
-        var balance = await _tokenService.GetPersonalTokenBalanceAsync(
-            ServiceId.LaraueBoards, paidEntityId, CancellationToken.None);
+        var balance = await InTransaction(() => _tokenService.GetPersonalTokenBalanceAsync(
+            ServiceId.LaraueBoards, paidEntityId, CancellationToken.None));
 
         Assert.Equal(1000, balance.FreeTokensCount);
         Assert.Equal(500, balance.SubscriptionTokensCount);
@@ -285,8 +292,8 @@ public class TokenServiceTests : BillingIntegrationTest
     {
         var paidEntityId = Guid.NewGuid();
 
-        var balance = await _tokenService.GetPersonalTokenBalanceAsync(
-            ServiceId.LaraueBoards, paidEntityId, CancellationToken.None);
+        var balance = await InTransaction(() => _tokenService.GetPersonalTokenBalanceAsync(
+            ServiceId.LaraueBoards, paidEntityId, CancellationToken.None));
 
         Assert.Equal(0, balance.SubscriptionTokensCount);
         Assert.Equal(25_000, balance.FreeTokensCount);
@@ -302,8 +309,8 @@ public class TokenServiceTests : BillingIntegrationTest
         await SeedPurchasedPackAsync(paidEntityId, SmallPackId, DateTime.UtcNow.AddDays(-1));
         await SetPurchasedBalanceAsync(paidEntityId, 100_000);
 
-        var balance = await _tokenService.GetPersonalTokenBalanceAsync(
-            ServiceId.LaraueBoards, paidEntityId, CancellationToken.None);
+        var balance = await InTransaction(() => _tokenService.GetPersonalTokenBalanceAsync(
+            ServiceId.LaraueBoards, paidEntityId, CancellationToken.None));
 
         Assert.Equal(0, balance.PurchasedTokensCount);
     }
@@ -313,8 +320,8 @@ public class TokenServiceTests : BillingIntegrationTest
     {
         var organizationId = Guid.NewGuid();
 
-        var balance = await _tokenService.GetOrganizationTokenBalanceAsync(
-            ServiceId.LaraueBoards, organizationId, CancellationToken.None);
+        var balance = await InTransaction(() => _tokenService.GetOrganizationTokenBalanceAsync(
+            ServiceId.LaraueBoards, organizationId, CancellationToken.None));
 
         Assert.Equal(0, balance.SubscriptionTokensCount);
         Assert.Equal(25_000, balance.FreeTokensCount);

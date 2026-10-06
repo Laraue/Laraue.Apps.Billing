@@ -23,12 +23,19 @@ public class SubscriptionServiceTests : BillingIntegrationTest
     }
 
     [Fact]
+    public async Task GetOrCreateActivePersonalSubscriptionIdAsync_ShouldRequireATransactionStartedByTheCaller()
+    {
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
     public async Task GetOrCreateActivePersonalSubscriptionIdAsync_ShouldAutoProvisionFreeSubscription_WhenNoneExists()
     {
         var userId = Guid.NewGuid();
 
-        var subscriptionId = await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
-            ServiceId.LaraueBoards, userId, CancellationToken.None);
+        var subscriptionId = await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
 
         var subscription = await Context.Subscriptions.SingleAsync(s => s.Id == subscriptionId);
         Assert.Equal(SubscriptionStatus.Active, subscription.Status);
@@ -50,8 +57,8 @@ public class SubscriptionServiceTests : BillingIntegrationTest
     {
         var userId = Guid.NewGuid();
 
-        var subscription = await _subscriptionService.GetActivePersonalSubscriptionAsync(
-            ServiceId.LaraueBoards, userId, CancellationToken.None);
+        var subscription = await InTransaction(() => _subscriptionService.GetActivePersonalSubscriptionAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
 
         var personal = Assert.IsType<LaraueBoardsPersonalActiveSubscription>(subscription);
         Assert.Equal("Free", personal.Code);
@@ -65,8 +72,8 @@ public class SubscriptionServiceTests : BillingIntegrationTest
     {
         var organizationId = Guid.NewGuid();
 
-        var subscription = await _subscriptionService.GetActiveOrganizationSubscriptionAsync(
-            ServiceId.LaraueBoards, organizationId, CancellationToken.None);
+        var subscription = await InTransaction(() => _subscriptionService.GetActiveOrganizationSubscriptionAsync(
+            ServiceId.LaraueBoards, organizationId, CancellationToken.None));
 
         var team = Assert.IsType<LaraueBoardsTeamActiveSubscription>(subscription);
         Assert.Equal("Free", team.Code);
@@ -79,10 +86,10 @@ public class SubscriptionServiceTests : BillingIntegrationTest
     {
         var userId = Guid.NewGuid();
 
-        var firstId = await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
-            ServiceId.LaraueBoards, userId, CancellationToken.None);
-        var secondId = await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
-            ServiceId.LaraueBoards, userId, CancellationToken.None);
+        var firstId = await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
+        var secondId = await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
 
         Assert.Equal(firstId, secondId);
         Assert.Equal(1, await Context.Subscriptions.CountAsync(s => s.PaidEntityId == userId));
@@ -95,8 +102,8 @@ public class SubscriptionServiceTests : BillingIntegrationTest
     {
         var organizationId = Guid.NewGuid();
 
-        var subscriptionId = await _subscriptionService.GetOrCreateActiveOrganizationSubscriptionIdAsync(
-            ServiceId.LaraueBoards, organizationId, CancellationToken.None);
+        var subscriptionId = await InTransaction(() => _subscriptionService.GetOrCreateActiveOrganizationSubscriptionIdAsync(
+            ServiceId.LaraueBoards, organizationId, CancellationToken.None));
 
         var subscription = await Context.Subscriptions.SingleAsync(s => s.Id == subscriptionId);
         var teamFreeTariffId = await Context.LaraueBoardsTeamTariffs
@@ -111,8 +118,8 @@ public class SubscriptionServiceTests : BillingIntegrationTest
     {
         var userId = Guid.NewGuid();
 
-        var subscriptionId = await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
-            ServiceId.MarkdownTranslator, userId, CancellationToken.None);
+        var subscriptionId = await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.MarkdownTranslator, userId, CancellationToken.None));
 
         var balanceAfterFirstDay = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
         Assert.Equal(10_000, balanceAfterFirstDay.FreeTokensCount);
@@ -124,8 +131,8 @@ public class SubscriptionServiceTests : BillingIntegrationTest
         await Context.SaveChangesAsync();
         _dateTimeProvider.UtcNow = new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc);
 
-        await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
-            ServiceId.MarkdownTranslator, userId, CancellationToken.None);
+        await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.MarkdownTranslator, userId, CancellationToken.None));
 
         var balanceAfterSecondDay = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
         Assert.Equal(10_000, balanceAfterSecondDay.FreeTokensCount);
@@ -137,15 +144,15 @@ public class SubscriptionServiceTests : BillingIntegrationTest
     {
         var userId = Guid.NewGuid();
 
-        var subscriptionId = await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
-            ServiceId.MarkdownTranslator, userId, CancellationToken.None);
+        var subscriptionId = await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.MarkdownTranslator, userId, CancellationToken.None));
 
         var balance = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
         balance.FreeTokensCount = 100;
         await Context.SaveChangesAsync();
 
-        await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
-            ServiceId.MarkdownTranslator, userId, CancellationToken.None);
+        await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.MarkdownTranslator, userId, CancellationToken.None));
 
         var balanceAfter = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
         Assert.Equal(100, balanceAfter.FreeTokensCount);
@@ -156,8 +163,8 @@ public class SubscriptionServiceTests : BillingIntegrationTest
     {
         var userId = Guid.NewGuid();
 
-        var subscriptionId = await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
-            ServiceId.LaraueBoards, userId, CancellationToken.None);
+        var subscriptionId = await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
 
         var balance = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
         balance.FreeTokensCount = 100;
@@ -165,16 +172,16 @@ public class SubscriptionServiceTests : BillingIntegrationTest
 
         // Later in the same month: nothing is granted again.
         _dateTimeProvider.UtcNow = new DateTime(2026, 1, 31, 23, 0, 0, DateTimeKind.Utc);
-        await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
-            ServiceId.LaraueBoards, userId, CancellationToken.None);
+        await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
 
         var balanceSameMonth = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
         Assert.Equal(100, balanceSameMonth.FreeTokensCount);
 
         // First call of the next month: the allowance is reset to 10k (not added to the 100 left).
         _dateTimeProvider.UtcNow = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc);
-        await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
-            ServiceId.LaraueBoards, userId, CancellationToken.None);
+        await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
 
         var balanceNextMonth = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
         Assert.Equal(25_000, balanceNextMonth.FreeTokensCount);
@@ -195,8 +202,8 @@ public class SubscriptionServiceTests : BillingIntegrationTest
     {
         var organizationId = Guid.NewGuid();
 
-        var subscriptionId = await _subscriptionService.GetOrCreateActiveOrganizationSubscriptionIdAsync(
-            ServiceId.LaraueBoards, organizationId, CancellationToken.None);
+        var subscriptionId = await InTransaction(() => _subscriptionService.GetOrCreateActiveOrganizationSubscriptionIdAsync(
+            ServiceId.LaraueBoards, organizationId, CancellationToken.None));
 
         var balance = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
         Assert.Equal(25_000, balance.FreeTokensCount);
@@ -208,8 +215,8 @@ public class SubscriptionServiceTests : BillingIntegrationTest
     {
         var userId = Guid.NewGuid();
 
-        var subscriptionId = await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
-            ServiceId.LaraueBoards, userId, CancellationToken.None);
+        var subscriptionId = await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
 
         // What a subscription provisioned before monthly allowances looks like: the old one-time
         // grant sits in the subscription balance and no monthly top-up has ever happened.
@@ -219,8 +226,8 @@ public class SubscriptionServiceTests : BillingIntegrationTest
         balance.LastMonthlyGrantAt = null;
         await Context.SaveChangesAsync();
 
-        await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
-            ServiceId.LaraueBoards, userId, CancellationToken.None);
+        await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
 
         var balanceAfter = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
         Assert.Equal(2_500_000, balanceAfter.SubscriptionTokensCount);
@@ -232,12 +239,12 @@ public class SubscriptionServiceTests : BillingIntegrationTest
     {
         var userId = Guid.NewGuid();
 
-        var subscriptionId = await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
-            ServiceId.MarkdownTranslator, userId, CancellationToken.None);
+        var subscriptionId = await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.MarkdownTranslator, userId, CancellationToken.None));
 
         _dateTimeProvider.UtcNow = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc);
-        await _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
-            ServiceId.MarkdownTranslator, userId, CancellationToken.None);
+        await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.MarkdownTranslator, userId, CancellationToken.None));
 
         // Markdown Translator's Free tariff has no monthly allowance: only the daily one applies.
         var balance = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
@@ -261,8 +268,8 @@ public class SubscriptionServiceTests : BillingIntegrationTest
         // guarding provisioning, both could see "no subscription yet" concurrently and each insert
         // their own Subscription + TariffGrant, double-granting the entity's balance.
         var subscriptionIds = await Task.WhenAll(
-            _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(ServiceId.LaraueBoards, userId, CancellationToken.None),
-            otherSubscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(ServiceId.LaraueBoards, userId, CancellationToken.None));
+            InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(ServiceId.LaraueBoards, userId, CancellationToken.None)),
+            otherContext.Database.InTransactionAsync(() => otherSubscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(ServiceId.LaraueBoards, userId, CancellationToken.None)));
 
         Assert.Equal(subscriptionIds[0], subscriptionIds[1]);
         Assert.Equal(1, await Context.Subscriptions.CountAsync(s => s.PaidEntityId == userId));
