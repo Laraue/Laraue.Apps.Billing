@@ -86,7 +86,6 @@ public sealed record PaymentNotificationResult(string Acknowledgement);
 
 public class CorePaymentService(
     DatabaseContext context,
-    ICoreTariffService coreTariffService,
     IPaymentProviderRegistry providerRegistry,
     IPaymentFulfillment fulfillment,
     IDateTimeProvider dateTimeProvider,
@@ -133,7 +132,7 @@ public class CorePaymentService(
             item.Title,
             item.PriceInUsdCents);
 
-        var currencyRate = await coreTariffService.GetCurrencyRateAsync(currencyCode, cancellationToken);
+        var currencyRate = await GetCurrencyRateAsync(currencyCode, cancellationToken);
 
         var amount = PriceCalculator.ConvertPrice(
             item.PriceInUsdCents,
@@ -364,6 +363,16 @@ public class CorePaymentService(
             payment.Status);
 
         return acknowledgement;
+    }
+
+    private async Task<CurrencyRate> GetCurrencyRateAsync(string currencyCode, CancellationToken cancellationToken)
+    {
+        var currencyRate = await context.CurrencyRates
+            .SingleOrDefaultAsync(x => x.Code == currencyCode, cancellationToken);
+
+        return currencyRate ?? throw new BadRequestException(
+            nameof(currencyCode),
+            string.Format(Errors.CurrencyRateNotFound, currencyCode));
     }
 
     private async Task<Guid> FindPaymentIdAsync(

@@ -1,6 +1,7 @@
+using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.DataAccess.Entities;
-using Laraue.Apps.Billing.Services;
 using Laraue.Apps.Billing.Services.Payments;
+using Microsoft.EntityFrameworkCore;
 
 namespace Laraue.Apps.Billing.WebApiServices;
 
@@ -12,8 +13,11 @@ public interface ITokenPackService
     Task<GetTokenPacksResponse> GetTokenPacks(GetTokenPacksRequest request, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Reads the token packs for sale, priced in the currency the payment provider charges in.
+/// </summary>
 public class TokenPackService(
-    ICoreTariffService coreTariffService,
+    DatabaseContext context,
     IPaymentProviderRegistry paymentProviderRegistry) : ITokenPackService
 {
     public async Task<GetTokenPacksResponse> GetTokenPacks(
@@ -22,22 +26,36 @@ public class TokenPackService(
     {
         // Only currencies a provider can charge in are offered, like for the tariffs.
         var currencyCode = paymentProviderRegistry.ResolveCurrency(request.CurrencyCode);
-        var currencyRate = await coreTariffService.GetCurrencyRateAsync(currencyCode, cancellationToken);
+        var currencyRate = await context.GetCurrencyRateAsync(currencyCode, cancellationToken);
 
-        var packs = await coreTariffService.GetTokenPacksAsync(currencyRate, cancellationToken);
+        var rows = await context.TokenPacks
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.Price)
+            .Select(x => new
+            {
+                x.Id,
+                x.Code,
+                x.Title,
+                x.TokensCount,
+                x.Price,
+                x.ExpirationDuration,
+                x.ExpirationPeriod,
+            })
+            .ToListAsync(cancellationToken);
 
+        // The price is converted client-side: the rounding of PriceCalculator is not translatable to SQL.
         return new GetTokenPacksResponse
         {
-            TokenPacks = packs
+            TokenPacks = rows
                 .Select(x => new TokenPack
                 {
                     Id = x.Id,
                     Code = x.Code,
                     Title = x.Title,
                     TokensCount = x.TokensCount,
-                    Price = x.Price,
-                    CurrencyCode = x.CurrencyCode,
-                    FormattedPrice = x.FormattedPrice,
+                    Price = currencyRate.Convert(x.Price),
+                    CurrencyCode = currencyRate.Code,
+                    FormattedPrice = currencyRate.Format(x.Price),
                     ExpirationDuration = x.ExpirationDuration,
                     ExpirationPeriod = x.ExpirationPeriod,
                 })

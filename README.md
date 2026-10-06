@@ -23,9 +23,14 @@ publishes a `-alpha.<run number>` prerelease so another service can integrate ag
 in-progress contract change before it merges.
 
 ### Laraue.Apps.Billing.Services
-Business logic shared across hosts (not tied to any one of them), e.g. `TariffService` (currency
-conversion, rounding, and formatting for a service's tariffs) and `SubscriptionService` (active
-subscription lookup, keyed by service + user/organization).
+Business logic shared across hosts (not tied to any one of them), e.g. `SubscriptionService` (active
+subscription lookup and provisioning, keyed by service + user/organization), `TokenService`,
+`CorePaymentService` and `PriceCalculator` (currency conversion and rounding). Core services need a
+transaction started by the host and hold no reads that only feed a host's response.
+
+### Laraue.Apps.Billing.WebApiServices
+The public web host's services: the reads behind its endpoints (`TariffService`, `TokenPackService`: queries,
+pricing in the payment currency, response DTOs) and `PaymentsService`.
 
 ### Laraue.Apps.Billing.WebApiHost
 The public ASP.NET web host: `Program.cs`, DI wiring, and its own `Controllers/TariffsController`.

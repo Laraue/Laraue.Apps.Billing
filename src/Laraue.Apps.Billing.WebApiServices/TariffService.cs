@@ -1,7 +1,11 @@
 using System.Text.Json.Serialization;
+using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.DataAccess.Entities;
 using Laraue.Apps.Billing.Services;
 using Laraue.Apps.Billing.Services.Payments;
+using Laraue.Apps.Billing.WebApiServices.Resources;
+using Laraue.Core.Exceptions.Web;
+using Microsoft.EntityFrameworkCore;
 
 namespace Laraue.Apps.Billing.WebApiServices;
 
@@ -15,73 +19,161 @@ public interface ITariffService
         CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Reads the tariffs of a service, already priced in the currency the payment provider charges in.
+/// The reads live here, in the host layer; core services only hold the domain logic and shared helpers
+/// such as <see cref="PriceCalculator"/>.
+/// </summary>
 public class TariffService(
-    ICoreTariffService coreTariffService,
+    DatabaseContext context,
     IPaymentProviderRegistry paymentProviderRegistry) : ITariffService
 {
     public async Task<GetServiceTariffsResponse> GetServiceTariffs(
         GetServiceTariffsRequest request,
         CancellationToken cancellationToken)
     {
-        var currencyCode = paymentProviderRegistry.ResolveCurrency(request.CurrencyCode);
-        var currencyRate = await coreTariffService.GetCurrencyRateAsync(currencyCode, cancellationToken);
+        if (!Enum.IsDefined(request.ServiceId))
+        {
+            throw new BadRequestException(
+                nameof(request.ServiceId),
+                string.Format(Errors.UnknownService, request.ServiceId));
+        }
 
-        var personalTariffs = await coreTariffService.GetPersonalTariffsAsync(request.ServiceId, currencyRate, cancellationToken);
-        var teamTariffs = await coreTariffService.GetTeamTariffsAsync(request.ServiceId, currencyRate, cancellationToken);
+        var currencyCode = paymentProviderRegistry.ResolveCurrency(request.CurrencyCode);
+        var currencyRate = await context.GetCurrencyRateAsync(currencyCode, cancellationToken);
+
+        var personalTariffs = request.ServiceId switch
+        {
+            ServiceId.LaraueBoards => await GetLaraueBoardsPersonalTariffsAsync(currencyRate, cancellationToken),
+            ServiceId.MarkdownTranslator => await GetMarkdownTranslatorPersonalTariffsAsync(currencyRate, cancellationToken),
+            _ => throw new InvalidOperationException($"Personal tariffs of service '{request.ServiceId}' are not mapped."),
+        };
+
+        var teamTariffs = request.ServiceId switch
+        {
+            ServiceId.LaraueBoards => await GetLaraueBoardsTeamTariffsAsync(currencyRate, cancellationToken),
+            // Markdown Translator only sells personal plans.
+            ServiceId.MarkdownTranslator => [],
+            _ => throw new InvalidOperationException($"Team tariffs of service '{request.ServiceId}' are not mapped."),
+        };
 
         return new GetServiceTariffsResponse
         {
-            PersonalSubscriptions = personalTariffs.Select(ToPersonalSubscription).ToList(),
-            TeamSubscriptions = teamTariffs.Select(ToTeamSubscription).ToList(),
+            PersonalSubscriptions = personalTariffs,
+            TeamSubscriptions = teamTariffs,
         };
     }
 
-    private static PersonalSubscription ToPersonalSubscription(CoreTariff tariff) => tariff switch
+    private async Task<List<PersonalSubscription>> GetLaraueBoardsPersonalTariffsAsync(
+        CurrencyRate currencyRate,
+        CancellationToken cancellationToken)
     {
-        CoreLaraueBoardsPersonalTariff t => new LaraueBoardsPersonalSubscription
-        {
-            Id = t.Id,
-            Title = t.Title,
-            Price = t.Price,
-            CurrencyCode = t.CurrencyCode,
-            FormattedPrice = t.FormattedPrice,
-            BillingDuration = t.BillingDuration,
-            BillingPeriod = t.BillingPeriod,
-            IncludedTokensCount = t.IncludedTokensCount,
-            LimitIssuesPerMonth = t.LimitIssuesPerMonth,
-            LimitFreeTeamOrganizationsCount = t.LimitFreeTeamOrganizationsCount,
-        },
-        CoreMarkdownTranslatorPersonalTariff t => new MarkdownTranslatorPersonalSubscription
-        {
-            Id = t.Id,
-            Title = t.Title,
-            Price = t.Price,
-            CurrencyCode = t.CurrencyCode,
-            FormattedPrice = t.FormattedPrice,
-            BillingDuration = t.BillingDuration,
-            BillingPeriod = t.BillingPeriod,
-            IncludedTokensCount = t.IncludedTokensCount,
-            IncludedDailyFreeTokensCount = t.IncludedDailyFreeTokensCount,
-        },
-        _ => throw new InvalidOperationException($"Unmapped personal tariff type '{tariff.GetType()}'."),
-    };
+        var rows = await context.LaraueBoardsPersonalTariffs
+            .Where(x => x.Tariff!.IsActive)
+            .OrderBy(x => x.Tariff!.Price)
+            .Select(x => new
+            {
+                x.Tariff!.Id,
+                x.Tariff.Title,
+                x.Tariff.Price,
+                x.Tariff.BillingPeriod,
+                x.Tariff.IncludedTokensCount,
+                x.LimitIssuesPerMonth,
+                x.LimitFreeTeamOrganizationsCount,
+            })
+            .ToListAsync(cancellationToken);
 
-    private static TeamSubscription ToTeamSubscription(CoreTariff tariff) => tariff switch
+        // The price is converted client-side: the rounding of PriceCalculator is not translatable to SQL.
+        return rows
+            .Select(x => (PersonalSubscription)new LaraueBoardsPersonalSubscription
+            {
+                Id = x.Id,
+                Title = x.Title,
+                Price = currencyRate.Convert(x.Price),
+                CurrencyCode = currencyRate.Code,
+                FormattedPrice = currencyRate.Format(x.Price),
+                BillingDuration = GetBillingDuration(x.BillingPeriod),
+                BillingPeriod = x.BillingPeriod,
+                IncludedTokensCount = x.IncludedTokensCount,
+                LimitIssuesPerMonth = x.LimitIssuesPerMonth,
+                LimitFreeTeamOrganizationsCount = x.LimitFreeTeamOrganizationsCount,
+            })
+            .ToList();
+    }
+
+    private async Task<List<PersonalSubscription>> GetMarkdownTranslatorPersonalTariffsAsync(
+        CurrencyRate currencyRate,
+        CancellationToken cancellationToken)
     {
-        CoreLaraueBoardsTeamTariff t => new LaraueBoardsTeamSubscription
-        {
-            Id = t.Id,
-            Title = t.Title,
-            Price = t.Price,
-            CurrencyCode = t.CurrencyCode,
-            FormattedPrice = t.FormattedPrice,
-            BillingDuration = t.BillingDuration,
-            BillingPeriod = t.BillingPeriod,
-            IncludedTokensCount = t.IncludedTokensCount,
-            LimitIssuesPerMonth = t.LimitIssuesPerMonth,
-        },
-        _ => throw new InvalidOperationException($"Unmapped team tariff type '{tariff.GetType()}'."),
-    };
+        var rows = await context.MarkdownTranslatorPersonalTariffs
+            .Where(x => x.Tariff!.IsActive)
+            .OrderBy(x => x.Tariff!.Price)
+            .Select(x => new
+            {
+                x.Tariff!.Id,
+                x.Tariff.Title,
+                x.Tariff.Price,
+                x.Tariff.BillingPeriod,
+                x.Tariff.IncludedTokensCount,
+                x.IncludedDailyFreeTokensCount,
+            })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .Select(x => (PersonalSubscription)new MarkdownTranslatorPersonalSubscription
+            {
+                Id = x.Id,
+                Title = x.Title,
+                Price = currencyRate.Convert(x.Price),
+                CurrencyCode = currencyRate.Code,
+                FormattedPrice = currencyRate.Format(x.Price),
+                BillingDuration = GetBillingDuration(x.BillingPeriod),
+                BillingPeriod = x.BillingPeriod,
+                IncludedTokensCount = x.IncludedTokensCount,
+                IncludedDailyFreeTokensCount = x.IncludedDailyFreeTokensCount,
+            })
+            .ToList();
+    }
+
+    private async Task<List<TeamSubscription>> GetLaraueBoardsTeamTariffsAsync(
+        CurrencyRate currencyRate,
+        CancellationToken cancellationToken)
+    {
+        var rows = await context.LaraueBoardsTeamTariffs
+            .Where(x => x.Tariff!.IsActive)
+            .OrderBy(x => x.Tariff!.Price)
+            .Select(x => new
+            {
+                x.Tariff!.Id,
+                x.Tariff.Title,
+                x.Tariff.Price,
+                x.Tariff.BillingPeriod,
+                x.Tariff.IncludedTokensCount,
+                x.LimitIssuesPerMonth,
+            })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .Select(x => (TeamSubscription)new LaraueBoardsTeamSubscription
+            {
+                Id = x.Id,
+                Title = x.Title,
+                Price = currencyRate.Convert(x.Price),
+                CurrencyCode = currencyRate.Code,
+                FormattedPrice = currencyRate.Format(x.Price),
+                BillingDuration = GetBillingDuration(x.BillingPeriod),
+                BillingPeriod = x.BillingPeriod,
+                IncludedTokensCount = x.IncludedTokensCount,
+                LimitIssuesPerMonth = x.LimitIssuesPerMonth,
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Null for a tariff that never expires, one period otherwise.
+    /// </summary>
+    private static int? GetBillingDuration(BillingPeriod billingPeriod) =>
+        billingPeriod == BillingPeriod.Forever ? null : 1;
 }
 
 public record GetServiceTariffsRequest

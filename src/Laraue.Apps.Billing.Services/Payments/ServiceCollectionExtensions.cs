@@ -17,7 +17,6 @@ public static class ServiceCollectionExtensions
         public IServiceCollection AddPaymentServices(IConfiguration configuration)
         {
             services.TryAddSingleton<IDateTimeProvider, DateTimeProvider>();
-            services.TryAddScoped<ICoreTariffService, CoreTariffService>();
 
             services
                 .AddOptions<PaymentsOptions>()
