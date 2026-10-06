@@ -20,8 +20,6 @@ public class RobokassaPaymentProvider(
 {
     public const string ProviderCode = "robokassa";
 
-    private const string PaymentIdParameter = "Shp_paymentId";
-
     // Robokassa shows at most 100 characters.
     private const int MaxDescriptionLength = 100;
 
@@ -41,7 +39,7 @@ public class RobokassaPaymentProvider(
 
         var customParameters = new Dictionary<string, string>
         {
-            [PaymentIdParameter] = request.PaymentId.ToString(),
+            [RobokassaParameters.PaymentId] = request.PaymentId.ToString(),
         };
 
         var description = request.Description.Length > MaxDescriptionLength
@@ -50,18 +48,18 @@ public class RobokassaPaymentProvider(
 
         var query = new List<KeyValuePair<string, string>>
         {
-            new("MerchantLogin", options.MerchantLogin),
-            new("OutSum", outSum),
-            new("Description", description),
-            new("SignatureValue", RobokassaSignature.ForCheckout(options, outSum, customParameters)),
-            new("Culture", options.Culture),
+            new(RobokassaParameters.MerchantLogin, options.MerchantLogin),
+            new(RobokassaParameters.OutSum, outSum),
+            new(RobokassaParameters.Description, description),
+            new(RobokassaParameters.SignatureValue, RobokassaSignature.ForCheckout(options, outSum, customParameters)),
+            new(RobokassaParameters.Culture, options.Culture),
         };
 
         query.AddRange(customParameters);
 
         if (options.IsTest)
         {
-            query.Add(new("IsTest", "1"));
+            query.Add(new(RobokassaParameters.IsTest, RobokassaParameters.IsTestEnabled));
         }
 
         var url = options.PaymentUrl + "?" + string.Join(
@@ -90,14 +88,14 @@ public class RobokassaPaymentProvider(
     {
         var options = Options;
 
-        var outSum = GetRequired(request, "OutSum");
-        var invId = GetRequired(request, "InvId");
-        var signature = GetRequired(request, "SignatureValue");
-        var paymentIdValue = GetRequired(request, PaymentIdParameter);
+        var outSum = GetRequired(request, RobokassaParameters.OutSum);
+        var invId = GetRequired(request, RobokassaParameters.InvId);
+        var signature = GetRequired(request, RobokassaParameters.SignatureValue);
+        var paymentIdValue = GetRequired(request, RobokassaParameters.PaymentId);
 
         // Every Shp_ parameter is part of the signature, not just our own.
         var customParameters = request.Parameters
-            .Where(x => x.Key.StartsWith("Shp_", StringComparison.OrdinalIgnoreCase))
+            .Where(x => x.Key.StartsWith(RobokassaParameters.CustomPrefix, StringComparison.OrdinalIgnoreCase))
             .ToDictionary(x => x.Key, x => x.Value);
 
         var expected = RobokassaSignature.ForResult(options, outSum, invId, customParameters);
@@ -113,7 +111,7 @@ public class RobokassaPaymentProvider(
                 options.IsTest,
                 options.HashAlgorithm);
 
-            throw new BadRequestException("SignatureValue", Errors.NotificationSignatureInvalid);
+            throw new BadRequestException(RobokassaParameters.SignatureValue, Errors.NotificationSignatureInvalid);
         }
 
         if (!Guid.TryParse(paymentIdValue, out var paymentId))
@@ -121,12 +119,12 @@ public class RobokassaPaymentProvider(
             logger.LogWarning(
                 "Robokassa notification {InvId} has an invalid {Parameter} '{Value}'",
                 invId,
-                PaymentIdParameter,
+                RobokassaParameters.PaymentId,
                 paymentIdValue);
 
             throw new BadRequestException(
-                PaymentIdParameter,
-                string.Format(Errors.NotificationParameterInvalid, PaymentIdParameter));
+                RobokassaParameters.PaymentId,
+                string.Format(Errors.NotificationParameterInvalid, RobokassaParameters.PaymentId));
         }
 
         if (!decimal.TryParse(outSum, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var amount))
@@ -136,7 +134,9 @@ public class RobokassaPaymentProvider(
                 invId,
                 outSum);
 
-            throw new BadRequestException("OutSum", string.Format(Errors.NotificationParameterInvalid, "OutSum"));
+            throw new BadRequestException(
+                RobokassaParameters.OutSum,
+                string.Format(Errors.NotificationParameterInvalid, RobokassaParameters.OutSum));
         }
 
         var amountMinorUnits = (long)decimal.Round(amount * 100, 0, MidpointRounding.AwayFromZero);
@@ -167,7 +167,7 @@ public class RobokassaPaymentProvider(
     {
         // Robokassa may change the case of the custom parameters it echoes back.
         var value = parameters
-            .FirstOrDefault(x => string.Equals(x.Key, PaymentIdParameter, StringComparison.OrdinalIgnoreCase))
+            .FirstOrDefault(x => string.Equals(x.Key, RobokassaParameters.PaymentId, StringComparison.OrdinalIgnoreCase))
             .Value;
 
         return Guid.TryParse(value, out var paymentId) ? paymentId : null;
@@ -175,7 +175,7 @@ public class RobokassaPaymentProvider(
 
     public string CreateNotificationAck(PaymentNotification notification)
     {
-        return $"OK{notification.ProviderPaymentId}";
+        return RobokassaParameters.AcknowledgementPrefix + notification.ProviderPaymentId;
     }
 
     /// <summary>
