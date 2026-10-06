@@ -100,6 +100,22 @@ payment cannot be identified - the success page proves nothing, only a notificat
 `Payments:Robokassa` (`MerchantLogin`, passwords, `IsTest: false` in production) via secrets; the
 Robokassa shop settings must point ResultURL/SuccessURL/FailURL to these addresses.
 
+**Callback design.** One generic `PaymentsController` handles every provider's callbacks, with the provider
+code in the route. A model binder (`PaymentCallbackModelBinder`, `[FromPaymentCallback]`) turns a request into a
+provider-neutral `PaymentCallback` (provider, query and form values merged into `Parameters`, headers, raw `Body`
+for a non-form request); the controller only passes it to `IPaymentsService`. `PaymentsService` (host layer) opens
+the transaction around `ICorePaymentService.HandleNotificationAsync` and commits it, because core services only
+require a started transaction. The provider alone knows its protocol: `ParseNotification` verifies the signature
+and returns a provider-neutral `PaymentNotification`, `TryGetReturnedPaymentId` reads our payment id from a
+customer's return, `CreateNotificationAck` builds the answer. A new provider is an `IPaymentProvider`, no web code.
+
+This is a deliberate trade-off, not the only possible design. The `Parameters`/`Headers`/`Body` bag fits
+Robokassa (form or query fields) but is the part that bends for a provider with another protocol, e.g. a JSON
+webhook signed over the raw body. The alternative is a controller per provider that parses its own protocol and
+hands the core a `PaymentNotification`; it removes the generic bag and the binder, but needs web code per provider
+(a web-facing provider project, or provider knowledge in `WebApiHost`) and a shared helper for the transaction and
+redirect steps. Switch to it when a provider no longer fits the bag, not before.
+
 Other services start a payment over gRPC (`payment.proto`: `CreatePersonalCheckout`/`CreateOrganizationCheckout`,
 implemented by `InternalApiServices.PaymentGrpcService` over `ICorePaymentService.CreateAsync`): they name the
 item and get back the provider's URL, never an amount or a provider. `AddPaymentServices(configuration)`

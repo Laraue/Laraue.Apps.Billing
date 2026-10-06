@@ -76,3 +76,16 @@ Prices are stored once, in USD cents, on `Tariff`/`TokenPack`. Every other curre
 `CurrencyRate` row (`RateToUsd`, `RoundingStep`, `RoundingMode`) used to convert and round the USD
 price on read - there's no per-currency price column to keep in sync. See
 [AGENTS.md](AGENTS.md#pricingcurrency-conversion) for the conversion/rounding details.
+
+## Payments
+
+A service starts a payment over gRPC (`payment.proto`), naming the tariff or token pack; Billing prices it
+itself, stores a pending `Payment` and returns the payment provider's address. The provider calls Billing
+back on public addresses, `/api/payments/{provider}/notify` (the server-to-server result, which is the only
+proof of payment) and `/success` / `/fail` (where the customer returns). On a success or fail return Billing
+finds the payment and redirects the customer to the pages configured for its service in
+`Payments:Redirects:Services:{ServiceId}`.
+
+Tariffs are offered, and checkouts routed, only in currencies a registered provider can charge in. How the
+callbacks are handled, why there is one generic callback controller and not one per provider, and what adding
+a provider or a product takes: see [AGENTS.md](AGENTS.md#payments).
