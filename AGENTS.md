@@ -47,6 +47,10 @@ apps (`Laraue.Apps.Boards`) can reference it - see "NuGet publishing" below.
   entry, not a schema change.
 - `TokenPack` - a one-off token top-up purchasable outside a subscription (`Price`, `TokensCount`,
   expiration).
+  Not tied to a service: the tokens go to the paying user or organization. `GET /api/token-packs`
+  (`TokenPacksController`/`TokenPackService`, public) returns the active ones, cheapest first, priced like
+  the tariffs and only in a currency a registered provider charges in; a pack is bought through the same
+  checkout as a plan (`PaymentKind.TokenPack`).
 - `Subscription` - an active/cancelled paid plan tying a `PaidEntityId` (user or org id) to a
   `Tariff`, with an `OwnerId` (who's actually paying, which can differ from who's covered - e.g. an
   org admin paying for a team plan).

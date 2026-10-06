@@ -25,6 +25,13 @@ public interface ICoreTariffService
         ServiceId serviceId,
         CurrencyRate currencyRate,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The active token packs, cheapest first, priced in the currency.
+    /// </summary>
+    Task<IReadOnlyList<CoreTokenPack>> GetTokenPacksAsync(
+        CurrencyRate currencyRate,
+        CancellationToken cancellationToken);
 }
 
 public class CoreTariffService(DatabaseContext context) : ICoreTariffService
@@ -44,6 +51,41 @@ public class CoreTariffService(DatabaseContext context) : ICoreTariffService
         }
 
         return currencyRate;
+    }
+
+    public async Task<IReadOnlyList<CoreTokenPack>> GetTokenPacksAsync(
+        CurrencyRate currencyRate,
+        CancellationToken cancellationToken)
+    {
+        var rows = await context.TokenPacks
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.Price)
+            .Select(x => new
+            {
+                x.Id,
+                x.Code,
+                x.Title,
+                x.TokensCount,
+                x.Price,
+                x.ExpirationDuration,
+                x.ExpirationPeriod,
+            })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .Select(x => new CoreTokenPack
+            {
+                Id = x.Id,
+                Code = x.Code,
+                Title = x.Title,
+                TokensCount = x.TokensCount,
+                Price = PriceCalculator.ConvertPrice(x.Price, currencyRate.RateToUsd, currencyRate.RoundingStep, currencyRate.RoundingMode),
+                CurrencyCode = currencyRate.Code,
+                FormattedPrice = PriceCalculator.FormatPrice(x.Price, currencyRate.RateToUsd, currencyRate.RoundingStep, currencyRate.RoundingMode, currencyRate.Symbol),
+                ExpirationDuration = x.ExpirationDuration,
+                ExpirationPeriod = x.ExpirationPeriod,
+            })
+            .ToList();
     }
 
     public Task<IReadOnlyList<CoreTariff>> GetPersonalTariffsAsync(
@@ -179,6 +221,27 @@ public class CoreTariffService(DatabaseContext context) : ICoreTariffService
             })
             .ToList();
     }
+}
+
+/// <summary>
+/// A token pack already priced in the requested currency, the same way a <see cref="CoreTariff"/> is.
+/// </summary>
+public sealed record CoreTokenPack
+{
+    public required Guid Id { get; init; }
+    public required string Code { get; init; }
+    public required string Title { get; init; }
+    public required long TokensCount { get; init; }
+    public required decimal Price { get; init; }
+    public required string CurrencyCode { get; init; }
+    public required string FormattedPrice { get; init; }
+
+    /// <summary>
+    /// How long the purchased tokens last: <see cref="ExpirationDuration"/> of
+    /// <see cref="ExpirationPeriod"/>.
+    /// </summary>
+    public required int ExpirationDuration { get; init; }
+    public required BillingPeriod ExpirationPeriod { get; init; }
 }
 
 /// <summary>

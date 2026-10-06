@@ -14,6 +14,7 @@ public static class ServiceCollectionExtensions
         {
             services.AddScoped<ICoreTariffService, CoreTariffService>();
             services.AddScoped<ITariffService, TariffService>();
+            services.AddScoped<ITokenPackService, TokenPackService>();
 
             services
                 .AddOptions<PaymentRedirectsOptions>()
