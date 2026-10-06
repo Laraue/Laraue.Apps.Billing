@@ -17,11 +17,11 @@ public class PaymentRedirectsOptions
     /// </summary>
     [Required]
     [Url]
-    public string SuccessUrl { get; set; } = null!;
+    public required string SuccessUrl { get; set; }
 
     [Required]
     [Url]
-    public string FailUrl { get; set; } = null!;
+    public required string FailUrl { get; set; }
 
     /// <summary>
     /// The addresses of the services, by <see cref="ServiceId"/> name.
@@ -39,9 +39,9 @@ public class ServiceRedirectsOptions
 {
     [Required]
     [Url]
-    public string SuccessUrl { get; set; } = null!;
+    public required string SuccessUrl { get; set; }
 
     [Required]
     [Url]
-    public string FailUrl { get; set; } = null!;
+    public required string FailUrl { get; set; }
 }

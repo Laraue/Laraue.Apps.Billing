@@ -19,6 +19,7 @@ public class RobokassaPaymentProviderTests
             MerchantLogin = "shop",
             PaymentUrl = "https://auth.robokassa.ru/Merchant/Index.aspx",
             Culture = "ru",
+            Currencies = ["RUB"],
             Password1 = "pass1",
             Password2 = "pass2",
             TestPassword1 = "testpass1",

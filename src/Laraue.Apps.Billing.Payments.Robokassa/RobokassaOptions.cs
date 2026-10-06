@@ -10,7 +10,7 @@ public class RobokassaOptions : IValidatableObject
     /// The shop identifier ("Идентификатор магазина") from the Robokassa technical settings.
     /// </summary>
     [Required]
-    public string MerchantLogin { get; set; } = null!;
+    public required string MerchantLogin { get; set; }
 
     /// <summary>
     /// "Пароль #1": signs the checkout request.
@@ -41,13 +41,13 @@ public class RobokassaOptions : IValidatableObject
     public RobokassaHashAlgorithm HashAlgorithm { get; set; }
 
     [Required]
-    public string PaymentUrl { get; set; } = null!;
+    public required string PaymentUrl { get; set; }
 
     /// <summary>
     /// Language of the payment page, e.g. <c>ru</c> or <c>en</c>.
     /// </summary>
     [Required]
-    public string Culture { get; set; } = null!;
+    public required string Culture { get; set; }
 
     /// <summary>
     /// ISO 4217 codes of the currencies the shop charges in, as enabled in the Robokassa account
@@ -56,7 +56,7 @@ public class RobokassaOptions : IValidatableObject
     /// </summary>
     [Required]
     [MinLength(1)]
-    public string[] Currencies { get; set; } = null!;
+    public required string[] Currencies { get; set; }
 
     /// <summary>
     /// The only currency the checkout can express.

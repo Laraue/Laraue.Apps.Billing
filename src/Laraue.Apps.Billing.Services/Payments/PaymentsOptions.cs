@@ -10,5 +10,5 @@ public class PaymentsOptions
     /// Code of the provider that new checkouts use when the caller does not name one.
     /// </summary>
     [Required]
-    public string DefaultProvider { get; set; } = null!;
+    public required string DefaultProvider { get; set; }
 }
