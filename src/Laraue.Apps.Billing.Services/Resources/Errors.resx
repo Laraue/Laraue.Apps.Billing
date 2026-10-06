@@ -39,6 +39,9 @@
     <data name="PaymentProviderCurrencyNotSupported" xml:space="preserve">
         <value>Payment provider '{0}' does not support currency '{1}'.</value>
     </data>
+    <data name="PaymentCurrencyNotAvailable" xml:space="preserve">
+        <value>No payment provider charges in currency '{0}'.</value>
+    </data>
     <data name="PaymentItemNotFound" xml:space="preserve">
         <value>Item '{0}' was not found or is not for sale.</value>
     </data>

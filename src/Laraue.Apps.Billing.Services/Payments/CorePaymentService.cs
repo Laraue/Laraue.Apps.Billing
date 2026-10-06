@@ -82,11 +82,12 @@ public class CorePaymentService(
 {
     public async Task<PaymentCheckout> CreateAsync(CreatePaymentRequest request, CancellationToken cancellationToken)
     {
-        var provider = request.ProviderCode is null
-            ? providerRegistry.Default
-            : providerRegistry.Get(request.ProviderCode);
-
         var currencyCode = request.CurrencyCode.ToUpperInvariant();
+
+        // A named provider is used as asked; otherwise the one that charges in the currency.
+        var provider = request.ProviderCode is null
+            ? providerRegistry.GetForCurrency(currencyCode)
+            : providerRegistry.Get(request.ProviderCode);
 
         logger.LogInformation(
             "Creating a payment: {Kind} {ItemId} of service {ServiceId} for paid entity {PaidEntityId} (organization: {IsOrganization}) by owner {OwnerId}, provider {Provider}, currency {CurrencyCode}, return url {ReturnUrl}",

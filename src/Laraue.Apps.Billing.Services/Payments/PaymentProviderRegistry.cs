@@ -15,11 +15,22 @@ public interface IPaymentProviderRegistry
     IPaymentProvider Get(string code);
 
     /// <summary>
-    /// The currency tariffs are priced in: the requested one when the default provider can charge it,
-    /// the provider's own currency when none is requested. Currencies the provider cannot charge are
-    /// never offered, so a price is never shown that cannot be paid.
+    /// The currencies any registered provider can charge in. Tariffs are offered in these only, so a
+    /// price is never shown that cannot be paid.
+    /// </summary>
+    IReadOnlySet<string> SupportedCurrencies { get; }
+
+    /// <summary>
+    /// The currency tariffs are priced in: the requested one when some provider can charge it, the
+    /// default provider's own currency when none is requested.
     /// </summary>
     string ResolveCurrency(string? requestedCurrencyCode);
+
+    /// <summary>
+    /// The provider a checkout in the currency goes through: the default one when it charges in the
+    /// currency, otherwise the first registered one that does.
+    /// </summary>
+    IPaymentProvider GetForCurrency(string currencyCode);
 }
 
 public class PaymentProviderRegistry(
@@ -29,31 +40,51 @@ public class PaymentProviderRegistry(
 {
     public IPaymentProvider Default => Get(options.Value.DefaultProvider);
 
+    public IReadOnlySet<string> SupportedCurrencies =>
+        providers.SelectMany(p => p.SupportedCurrencies).ToHashSet(StringComparer.Ordinal);
+
     public string ResolveCurrency(string? requestedCurrencyCode)
     {
-        var provider = Default;
         if (string.IsNullOrWhiteSpace(requestedCurrencyCode))
         {
             // A provider charging in several currencies gets a stable choice; the callers that care
             // name the currency.
-            return provider.SupportedCurrencies.Order(StringComparer.Ordinal).First();
+            return Default.SupportedCurrencies.Order(StringComparer.Ordinal).First();
         }
 
         var code = requestedCurrencyCode.ToUpperInvariant();
-        if (!provider.SupportedCurrencies.Contains(code))
+        if (!SupportedCurrencies.Contains(code))
         {
             logger.LogWarning(
-                "Currency {CurrencyCode} is not offered: provider {Provider} charges in {SupportedCurrencies}",
+                "Currency {CurrencyCode} is not offered: the registered providers charge in {SupportedCurrencies}",
                 code,
-                provider.Code,
-                string.Join(", ", provider.SupportedCurrencies));
+                string.Join(", ", SupportedCurrencies));
 
             throw new BadRequestException(
                 nameof(requestedCurrencyCode),
-                string.Format(Errors.PaymentProviderCurrencyNotSupported, provider.Code, code));
+                string.Format(Errors.PaymentCurrencyNotAvailable, code));
         }
 
         return code;
+    }
+
+    public IPaymentProvider GetForCurrency(string currencyCode)
+    {
+        var code = currencyCode.ToUpperInvariant();
+        var provider = Default.SupportedCurrencies.Contains(code)
+            ? Default
+            : providers.FirstOrDefault(p => p.SupportedCurrencies.Contains(code));
+
+        if (provider is null)
+        {
+            logger.LogWarning("No registered payment provider charges in currency {CurrencyCode}", code);
+
+            throw new BadRequestException(
+                nameof(currencyCode),
+                string.Format(Errors.PaymentCurrencyNotAvailable, code));
+        }
+
+        return provider;
     }
 
     public IPaymentProvider Get(string code)

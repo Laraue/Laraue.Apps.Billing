@@ -123,6 +123,15 @@ namespace Laraue.Apps.Billing.Services.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to No payment provider charges in currency &apos;{0}&apos;..
+        /// </summary>
+        internal static string PaymentCurrencyNotAvailable {
+            get {
+                return ResourceManager.GetString("PaymentCurrencyNotAvailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Item &apos;{0}&apos; was not found or is not for sale..
         /// </summary>
         internal static string PaymentItemNotFound {
