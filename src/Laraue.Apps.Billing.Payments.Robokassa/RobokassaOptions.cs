@@ -49,6 +49,19 @@ public class RobokassaOptions : IValidatableObject
     [Required]
     public string Culture { get; set; } = null!;
 
+    /// <summary>
+    /// ISO 4217 codes of the currencies the shop charges in, as enabled in the Robokassa account
+    /// ("Валюты"). Only <c>RUB</c> is supported by the code so far: the checkout never sends
+    /// <c>OutSumCurrency</c>, so any other currency would charge its amount in rubles.
+    /// </summary>
+    [MinLength(1)]
+    public string[] Currencies { get; set; } = [SupportedCurrency];
+
+    /// <summary>
+    /// The only currency the checkout can express.
+    /// </summary>
+    public const string SupportedCurrency = "RUB";
+
     public string? ActivePassword1 => IsTest ? TestPassword1 : Password1;
 
     public string? ActivePassword2 => IsTest ? TestPassword2 : Password2;
@@ -58,6 +71,13 @@ public class RobokassaOptions : IValidatableObject
     /// </summary>
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
+        foreach (var currency in Currencies.Where(x => !string.Equals(x, SupportedCurrency, StringComparison.OrdinalIgnoreCase)))
+        {
+            yield return new ValidationResult(
+                $"Currency '{currency}' is not supported by the Robokassa provider yet, only {SupportedCurrency}.",
+                [nameof(Currencies)]);
+        }
+
         var (password1Name, password2Name) = IsTest
             ? (nameof(TestPassword1), nameof(TestPassword2))
             : (nameof(Password1), nameof(Password2));

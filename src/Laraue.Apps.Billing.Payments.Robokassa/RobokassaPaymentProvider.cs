@@ -25,13 +25,12 @@ public class RobokassaPaymentProvider(
     // Robokassa shows at most 100 characters.
     private const int MaxDescriptionLength = 100;
 
-    private static readonly HashSet<string> Currencies = ["RUB"];
-
     private RobokassaOptions Options => optionsAccessor.Value;
 
     public string Code => ProviderCode;
 
-    public IReadOnlySet<string> SupportedCurrencies => Currencies;
+    public IReadOnlySet<string> SupportedCurrencies =>
+        Options.Currencies.Select(x => x.ToUpperInvariant()).ToHashSet(StringComparer.Ordinal);
 
     public Task<PaymentCheckoutResult> CreateCheckoutAsync(
         PaymentCheckoutRequest request,
