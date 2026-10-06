@@ -54,8 +54,9 @@ public class RobokassaOptions : IValidatableObject
     /// ("Валюты"). Only <c>RUB</c> is supported by the code so far: the checkout never sends
     /// <c>OutSumCurrency</c>, so any other currency would charge its amount in rubles.
     /// </summary>
+    [Required]
     [MinLength(1)]
-    public string[] Currencies { get; set; } = [SupportedCurrency];
+    public string[] Currencies { get; set; } = null!;
 
     /// <summary>
     /// The only currency the checkout can express.
