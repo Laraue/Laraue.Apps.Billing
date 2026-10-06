@@ -32,9 +32,15 @@ public interface IPaymentsService
     /// Where to send the customer when the provider returns them after a payment. Returning to the
     /// success address is not a proof of payment, only a notification is.
     /// </summary>
-    string GetSuccessUrl(string provider);
+    Task<string> GetSuccessUrl(
+        string provider,
+        IReadOnlyDictionary<string, string> parameters,
+        CancellationToken cancellationToken);
 
-    string GetFailUrl(string provider);
+    Task<string> GetFailUrl(
+        string provider,
+        IReadOnlyDictionary<string, string> parameters,
+        CancellationToken cancellationToken);
 }
 
 public class PaymentsService(
@@ -64,20 +70,36 @@ public class PaymentsService(
         return result.Acknowledgement;
     }
 
-    public string GetSuccessUrl(string provider)
+    public async Task<string> GetSuccessUrl(
+        string provider,
+        IReadOnlyDictionary<string, string> parameters,
+        CancellationToken cancellationToken)
     {
-        var url = redirectsOptions.Value.SuccessUrl;
+        var serviceId = await corePaymentService.FindReturnedPaymentServiceAsync(provider, parameters, cancellationToken);
+        var url = redirectsOptions.Value.GetSuccessUrl(serviceId);
 
-        logger.LogInformation("Customer returned from {Provider} after paying, redirecting to {Url}", provider, url);
+        logger.LogInformation(
+            "Customer returned from {Provider} after paying for service {ServiceId}, redirecting to {Url}",
+            provider,
+            serviceId,
+            url);
 
         return url;
     }
 
-    public string GetFailUrl(string provider)
+    public async Task<string> GetFailUrl(
+        string provider,
+        IReadOnlyDictionary<string, string> parameters,
+        CancellationToken cancellationToken)
     {
-        var url = redirectsOptions.Value.FailUrl;
+        var serviceId = await corePaymentService.FindReturnedPaymentServiceAsync(provider, parameters, cancellationToken);
+        var url = redirectsOptions.Value.GetFailUrl(serviceId);
 
-        logger.LogInformation("Customer returned from {Provider} without paying, redirecting to {Url}", provider, url);
+        logger.LogInformation(
+            "Customer returned from {Provider} without paying for service {ServiceId}, redirecting to {Url}",
+            provider,
+            serviceId,
+            url);
 
         return url;
     }

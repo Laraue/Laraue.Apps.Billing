@@ -56,9 +56,11 @@ public class PaymentsController(IPaymentsService paymentsService) : ControllerBa
     /// </summary>
     [HttpGet("success")]
     [HttpPost("success")]
-    public IActionResult Success(string provider)
+    public async Task<IActionResult> Success(string provider, CancellationToken cancellationToken = default)
     {
-        return Redirect(paymentsService.GetSuccessUrl(provider));
+        var parameters = await ReadParametersAsync(cancellationToken);
+
+        return Redirect(await paymentsService.GetSuccessUrl(provider, parameters, cancellationToken));
     }
 
     /// <summary>
@@ -66,8 +68,25 @@ public class PaymentsController(IPaymentsService paymentsService) : ControllerBa
     /// </summary>
     [HttpGet("fail")]
     [HttpPost("fail")]
-    public IActionResult Fail(string provider)
+    public async Task<IActionResult> Fail(string provider, CancellationToken cancellationToken = default)
     {
-        return Redirect(paymentsService.GetFailUrl(provider));
+        var parameters = await ReadParametersAsync(cancellationToken);
+
+        return Redirect(await paymentsService.GetFailUrl(provider, parameters, cancellationToken));
+    }
+
+    private async Task<Dictionary<string, string>> ReadParametersAsync(CancellationToken cancellationToken)
+    {
+        var parameters = Request.Query.ToDictionary(x => x.Key, x => x.Value.ToString());
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync(cancellationToken);
+            foreach (var (name, value) in form)
+            {
+                parameters[name] = value.ToString();
+            }
+        }
+
+        return parameters;
     }
 }

@@ -35,6 +35,13 @@ public interface IPaymentProvider
     PaymentNotification ParseNotification(PaymentNotificationRequest request);
 
     /// <summary>
+    /// Reads our payment id from the parameters the provider sends along when the customer returns to
+    /// the success or fail address. Nothing is verified, so the id may only choose where to send the
+    /// customer, never prove a payment. Null when the parameters carry no valid id.
+    /// </summary>
+    Guid? TryGetReturnedPaymentId(IReadOnlyDictionary<string, string> parameters);
+
+    /// <summary>
     /// The body the provider expects as the answer to a handled notification, e.g. <c>OK123</c>.
     /// </summary>
     string CreateNotificationAck(PaymentNotification notification);

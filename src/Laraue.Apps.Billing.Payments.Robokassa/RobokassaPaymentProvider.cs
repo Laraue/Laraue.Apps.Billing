@@ -164,6 +164,16 @@ public class RobokassaPaymentProvider(
         };
     }
 
+    public Guid? TryGetReturnedPaymentId(IReadOnlyDictionary<string, string> parameters)
+    {
+        // Robokassa may change the case of the custom parameters it echoes back.
+        var value = parameters
+            .FirstOrDefault(x => string.Equals(x.Key, PaymentIdParameter, StringComparison.OrdinalIgnoreCase))
+            .Value;
+
+        return Guid.TryParse(value, out var paymentId) ? paymentId : null;
+    }
+
     public string CreateNotificationAck(PaymentNotification notification)
     {
         return $"OK{notification.ProviderPaymentId}";

@@ -131,6 +131,40 @@ public class PaymentsControllerTests : BillingIntegrationTest
         Assert.Equal(expectedUrl, response.Headers.Location!.ToString());
     }
 
+    [Theory]
+    [InlineData(ServiceId.LaraueBoards, "success", "https://boards.laraue.com/payment/success")]
+    [InlineData(ServiceId.LaraueBoards, "fail", "https://boards.laraue.com/payment/fail")]
+    [InlineData(ServiceId.MarkdownTranslator, "success", "https://translator.example/payment/success")]
+    [InlineData(ServiceId.MarkdownTranslator, "fail", "https://translator.example/payment/fail")]
+    public async Task ReturnPages_ShouldRedirectToTheServiceOfThePayment_WhenPaymentIsKnown(
+        ServiceId serviceId,
+        string page,
+        string expectedUrl)
+    {
+        var payment = await CreatePendingPaymentAsync();
+        payment.ServiceId = serviceId;
+        await Context.SaveChangesAsync();
+
+        var response = await _client.GetAsync($"/api/payments/robokassa/{page}?InvId=1&Shp_paymentId={payment.Id}");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal(expectedUrl, response.Headers.Location!.ToString());
+    }
+
+    [Theory]
+    [InlineData("success", "https://boards.laraue.com/payment/success")]
+    [InlineData("fail", "https://boards.laraue.com/payment/fail")]
+    public async Task ReturnPages_ShouldRedirectToTheDefaultUrl_WhenPaymentCannotBeIdentified(
+        string page,
+        string expectedUrl)
+    {
+        var unknown = await _client.GetAsync($"/api/payments/robokassa/{page}?InvId=1&Shp_paymentId={Guid.NewGuid()}");
+        var invalid = await _client.GetAsync($"/api/payments/robokassa/{page}?InvId=1&Shp_paymentId=not-a-guid");
+
+        Assert.Equal(expectedUrl, unknown.Headers.Location!.ToString());
+        Assert.Equal(expectedUrl, invalid.Headers.Location!.ToString());
+    }
+
     private async Task<Payment> CreatePendingPaymentAsync()
     {
         var userId = Guid.NewGuid();

@@ -28,6 +28,16 @@ public interface ICorePaymentService
         string providerCode,
         PaymentNotificationRequest request,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The service a customer returning from the provider paid for, found from the parameters of the
+    /// return address. Null when the payment cannot be identified. The result only chooses where to
+    /// send the customer, it says nothing about whether the payment succeeded.
+    /// </summary>
+    Task<ServiceId?> FindReturnedPaymentServiceAsync(
+        string providerCode,
+        IReadOnlyDictionary<string, string> parameters,
+        CancellationToken cancellationToken);
 }
 
 public sealed record CreatePaymentRequest
@@ -205,6 +215,38 @@ public class CorePaymentService(
             PaymentStatus.Pending);
 
         return new PaymentCheckout(paymentId, checkout.Url);
+    }
+
+    public async Task<ServiceId?> FindReturnedPaymentServiceAsync(
+        string providerCode,
+        IReadOnlyDictionary<string, string> parameters,
+        CancellationToken cancellationToken)
+    {
+        var provider = providerRegistry.Get(providerCode);
+
+        var paymentId = provider.TryGetReturnedPaymentId(parameters);
+        if (paymentId is null)
+        {
+            logger.LogInformation(
+                "A customer returned from {Provider} without a payment id, parameters: {ParameterNames}",
+                provider.Code,
+                string.Join(", ", parameters.Keys));
+
+            return null;
+        }
+
+        var serviceId = await context.Payments
+            .Where(x => x.Id == paymentId && x.Provider == provider.Code)
+            .Select(x => (ServiceId?)x.ServiceId)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        logger.LogInformation(
+            "A customer returned from {Provider} for payment {PaymentId}, service {ServiceId}",
+            provider.Code,
+            paymentId,
+            serviceId);
+
+        return serviceId;
     }
 
     public async Task<PaymentNotificationResult> HandleNotificationAsync(
