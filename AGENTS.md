@@ -111,6 +111,37 @@ production): every decision and state change with the ids needed to follow one p
 Use `ILogger<T>` and structured templates. Never log secrets: a provider logs notification parameter
 *names*, not values, since they carry its signature, and never its passwords or keys.
 
+## Adding a product
+
+A new product is a new `ServiceId`. Everything provider- and currency-related is already generic (any
+service is priced and paid through the same code); what is per product is below. Do all of it - the
+`ServiceOnboardingTests` theory runs over every `ServiceId` and fails for a product that has no paid
+tariffs, a tariff that `TariffService` cannot map, or tariffs `CorePaymentService` does not recognise.
+
+1. `DataAccess`: the `ServiceId` value (`Entities/Service.cs`), its row in `Data/ServicesData.cs`, a
+   `{Service}PersonalTariff` (and `{Service}TeamTariff` when it sells team plans) entity with its
+   `DbSet`/mapping in `DatabaseContext`, the tariffs in `Data/{Service}TariffsData.cs` (at least one
+   paid one) and a migration. Free allowances need a `BalanceSubscriptionToken` rule, see "Free
+   allowances" above.
+2. Reading tariffs: the `Core{Service}...Tariff` records and their loading in `CoreTariffService`, and
+   the mapping to the public `{Service}...Subscription` types in `WebApiServices/TariffService`.
+3. Paying: add the service to the item check in `CorePaymentService.GetTariffItemAsync` (the switch
+   on `ServiceId`, personal and team tables). A service missing there can never be bought.
+4. gRPC: the service in `subscription.proto` (its `ServiceId` value, the `oneof` payload message),
+   `GrpcParsing.ReadDomainServiceId`, `SubscriptionGrpcService` and `SubscriptionService`
+   (the active subscription of the service). Changing the `.proto` needs a NuGet release of
+   `Laraue.Apps.Billing.Internal.Contracts` - see "NuGet publishing".
+5. Config: `Payments:Redirects:Services:{ServiceId}` with that product's `SuccessUrl`/`FailUrl`. The
+   provider sends every customer back to the one `/api/payments/{provider}/success|fail` address;
+   Billing finds the payment from the returned parameters and redirects to its service's pages. A
+   service without an entry falls back to the global `SuccessUrl`/`FailUrl` - fine only for the first
+   product. The provider's shop settings keep pointing at Billing, never at a product.
+6. The product's own backend calls Billing with the `x-laraue-service-id` header and its own tariff
+   ids; the checkout currency is one Billing offers (`GET /api/tariffs` returns tariffs only in
+   currencies a registered provider charges in).
+7. Not per product yet: the default provider and the provider credentials (one Robokassa shop). A
+   product that needs its own shop or provider needs per-service provider settings first.
+
 ## Pricing/currency conversion
 
 `PriceCalculator.ConvertPrice` (in `Services`, a static utility - no DB/DI dependency) converts a
