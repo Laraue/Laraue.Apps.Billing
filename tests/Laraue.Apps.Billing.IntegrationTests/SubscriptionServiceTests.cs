@@ -1,4 +1,5 @@
 using Laraue.Apps.Billing.DataAccess;
+using Laraue.Apps.Billing.DataAccess.Data;
 using Laraue.Apps.Billing.DataAccess.Entities;
 using Laraue.Apps.Billing.IntegrationTests.Infrastructure;
 using Laraue.Apps.Billing.Services;
@@ -195,6 +196,125 @@ public class SubscriptionServiceTests : BillingIntegrationTest
             .Select(t => t.Delta)
             .ToListAsync();
         Assert.Equal([25_000L, 24_900L], deltas);
+    }
+
+    [Fact]
+    public async Task GetOrCreateActivePersonalSubscriptionIdAsync_ShouldKeepTheFreePeriod_WhenItIsNotOverAtTheStartOfACalendarMonth()
+    {
+        _dateTimeProvider.UtcNow = new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc);
+        var userId = Guid.NewGuid();
+
+        var subscriptionId = await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
+
+        var balance = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        balance.FreeTokensCount = 100;
+        await Context.SaveChangesAsync();
+
+        // A new calendar month, but the rolling month of the plan is still on: nothing is granted.
+        _dateTimeProvider.UtcNow = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc);
+        await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
+
+        var balanceAfter = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        Assert.Equal(100, balanceAfter.FreeTokensCount);
+        var subscription = await Context.Subscriptions.SingleAsync(s => s.Id == subscriptionId);
+        Assert.Equal(new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc), subscription.CurrentPeriodStartedAt);
+    }
+
+    [Fact]
+    public async Task GetOrCreateActivePersonalSubscriptionIdAsync_ShouldStartANewFreePeriodAtTheFirstUseAfterTheMonth_Always()
+    {
+        _dateTimeProvider.UtcNow = new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc);
+        var userId = Guid.NewGuid();
+
+        var subscriptionId = await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
+
+        var balance = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        balance.FreeTokensCount = 100;
+        await Context.SaveChangesAsync();
+
+        // Nothing runs when the month is over; the plan is renewed by the next use, whenever it comes.
+        _dateTimeProvider.UtcNow = new DateTime(2026, 3, 20, 8, 30, 0, DateTimeKind.Utc);
+        await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
+
+        var balanceAfter = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        Assert.Equal(25_000, balanceAfter.FreeTokensCount);
+        var subscription = await Context.Subscriptions.SingleAsync(s => s.Id == subscriptionId);
+        Assert.Equal(new DateTime(2026, 3, 20, 8, 30, 0, DateTimeKind.Utc), subscription.CurrentPeriodStartedAt);
+
+        // The new period is one more month from that use: a use a day later grants nothing.
+        balanceAfter.FreeTokensCount = 7;
+        await Context.SaveChangesAsync();
+        _dateTimeProvider.UtcNow = new DateTime(2026, 3, 21, 8, 30, 0, DateTimeKind.Utc);
+        await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
+        Assert.Equal(7, (await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId)).FreeTokensCount);
+
+        var deltas = await Context.TokenTransactions
+            .Where(t => t.PaidEntityId == userId && t.Reason == TokenTransactionReason.TariffGrant)
+            .OrderBy(t => t.CreatedAt)
+            .Select(t => t.Delta)
+            .ToListAsync();
+        Assert.Equal([25_000L, 24_900L], deltas);
+    }
+
+    [Fact]
+    public async Task GetActivePersonalSubscriptionAsync_ShouldReturnTheRollingMonthOfAFreePlan_Always()
+    {
+        _dateTimeProvider.UtcNow = new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc);
+        var userId = Guid.NewGuid();
+
+        var subscription = await InTransaction(() => _subscriptionService.GetActivePersonalSubscriptionAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
+
+        Assert.Equal(new DateTime(2026, 1, 15, 10, 0, 0, DateTimeKind.Utc), subscription.LimitPeriodStartedAt);
+        Assert.Equal(new DateTime(2026, 2, 15, 10, 0, 0, DateTimeKind.Utc), subscription.PeriodEndsAt);
+        Assert.True(subscription.PeriodResets);
+
+        // The month after, the first read returns the renewed period.
+        _dateTimeProvider.UtcNow = new DateTime(2026, 2, 20, 9, 0, 0, DateTimeKind.Utc);
+        var renewed = await InTransaction(() => _subscriptionService.GetActivePersonalSubscriptionAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
+
+        Assert.Equal(new DateTime(2026, 2, 20, 9, 0, 0, DateTimeKind.Utc), renewed.LimitPeriodStartedAt);
+        Assert.Equal(new DateTime(2026, 3, 20, 9, 0, 0, DateTimeKind.Utc), renewed.PeriodEndsAt);
+    }
+
+    [Fact]
+    public async Task GetActivePersonalSubscriptionAsync_ShouldReturnThePaidPeriodAndTheCalendarMonthOfALimit_WhenPlanIsPaid()
+    {
+        _dateTimeProvider.UtcNow = new DateTime(2026, 1, 20, 10, 0, 0, DateTimeKind.Utc);
+        var userId = Guid.NewGuid();
+        var subscriptionId = Guid.NewGuid();
+        var finishesAt = new DateTime(2026, 2, 10, 10, 0, 0, DateTimeKind.Utc);
+
+        Context.Subscriptions.Add(new Subscription
+        {
+            Id = subscriptionId,
+            ServiceId = ServiceId.LaraueBoards,
+            TariffId = LaraueBoardsTariffsData.PersonalTariffs[1].Tariff.Id,
+            OwnerId = userId,
+            PaidEntityId = userId,
+            Status = SubscriptionStatus.Active,
+            CurrentPeriodStartedAt = new DateTime(2026, 1, 10, 10, 0, 0, DateTimeKind.Utc),
+            CurrentPeriodFinishesAt = finishesAt,
+        });
+        Context.BalanceSubscriptionTokens.Add(new BalanceSubscriptionToken
+        {
+            SubscriptionId = subscriptionId,
+            SubscriptionTokensCount = 300_000,
+        });
+        await Context.SaveChangesAsync();
+
+        var subscription = await InTransaction(() => _subscriptionService.GetActivePersonalSubscriptionAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
+
+        Assert.Equal(finishesAt, subscription.PeriodEndsAt);
+        Assert.False(subscription.PeriodResets);
+        Assert.Equal(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), subscription.LimitPeriodStartedAt);
     }
 
     [Fact]

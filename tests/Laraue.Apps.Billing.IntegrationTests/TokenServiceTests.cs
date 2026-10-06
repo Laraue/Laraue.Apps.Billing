@@ -302,6 +302,34 @@ public class TokenServiceTests : BillingIntegrationTest
     }
 
     [Fact]
+    public async Task GetPersonalTokenBalanceAsync_ShouldReturnTheEarliestExpiryOfThePacksWithTokens_Always()
+    {
+        var paidEntityId = Guid.NewGuid();
+        await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 0, subscriptionTokens: 0);
+        var later = DateTime.UtcNow.AddDays(60);
+        var sooner = DateTime.UtcNow.AddDays(30);
+        await SeedPurchasedPackAsync(paidEntityId, SmallPackId, later);
+        await SeedPurchasedPackAsync(paidEntityId, SmallPackId, sooner);
+        await SetPurchasedBalanceAsync(paidEntityId, 200_000);
+
+        var balance = await InTransaction(() => _tokenService.GetPersonalTokenBalanceAsync(
+            ServiceId.LaraueBoards, paidEntityId, CancellationToken.None));
+
+        Assert.Equal(sooner, balance.PurchasedTokensExpireAt!.Value, TimeSpan.FromMilliseconds(1));
+    }
+
+    [Fact]
+    public async Task GetPersonalTokenBalanceAsync_ShouldNotReturnAnExpiry_WhenThereAreNoPurchasedTokens()
+    {
+        var paidEntityId = Guid.NewGuid();
+
+        var balance = await InTransaction(() => _tokenService.GetPersonalTokenBalanceAsync(
+            ServiceId.LaraueBoards, paidEntityId, CancellationToken.None));
+
+        Assert.Null(balance.PurchasedTokensExpireAt);
+    }
+
+    [Fact]
     public async Task GetPersonalTokenBalanceAsync_ShouldExcludeExpiredPacks_WhenComputingPurchasedBalance()
     {
         var paidEntityId = Guid.NewGuid();

@@ -59,6 +59,11 @@ public interface ISubscriptionService
 /// </remarks>
 public class SubscriptionService(DatabaseContext context, IDateTimeProvider dateTimeProvider) : ISubscriptionService
 {
+    /// <summary>
+    /// How long the period of a Free plan lasts.
+    /// </summary>
+    private const int FreePeriodMonths = 1;
+
     public Task<ActiveSubscription> GetActivePersonalSubscriptionAsync(
         ServiceId serviceId,
         Guid userId,
@@ -128,15 +133,22 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
         Guid tariffId;
         BalanceSubscriptionToken balance;
 
+        // Whether the plan's monthly allowance has to be granted now: a Free plan gets it when it is
+        // provisioned and again whenever its period is renewed.
+        bool grantMonthlyAllowance;
+
         if (existingId is { } id)
         {
             subscriptionId = id;
-            tariffId = await context.Subscriptions
-                .Where(s => s.Id == id)
-                .Select(s => s.TariffId)
-                .SingleAsync(cancellationToken);
+            var subscription = await context.Subscriptions.SingleAsync(s => s.Id == id, cancellationToken);
+            tariffId = subscription.TariffId;
             balance = await context.BalanceSubscriptionTokens
                 .SingleAsync(b => b.SubscriptionId == id, cancellationToken);
+
+            var renewed = await RenewFreePeriodIfOverAsync(subscription, now, cancellationToken);
+
+            // A Free plan provisioned before the allowance existed has never been granted it either.
+            grantMonthlyAllowance = renewed || balance.LastMonthlyGrantAt is null;
         }
         else
         {
@@ -170,10 +182,13 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                 FreeTokensCount = 0,
             };
             context.BalanceSubscriptionTokens.Add(balance);
+
+            grantMonthlyAllowance = true;
         }
 
         await ApplyDailyGrantTopUpIfNeededAsync(tariffId, paidEntityId, balance, now, cancellationToken);
-        await ApplyMonthlyGrantTopUpIfNeededAsync(tariffId, paidEntityId, balance, now, cancellationToken);
+        await ApplyMonthlyGrantTopUpIfNeededAsync(
+            tariffId, paidEntityId, balance, now, grantMonthlyAllowance, cancellationToken);
 
         await context.SaveChangesAsync(cancellationToken);
 
@@ -232,7 +247,8 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
     /// A free (<see cref="Tariff.IsFree"/>, <see cref="BillingPeriod.Forever"/>) tariff never renews,
     /// so its <see cref="Tariff.IncludedTokensCount"/> is a monthly allowance instead: resets
     /// (doesn't accumulate) <see cref="BalanceSubscriptionToken.FreeTokensCount"/> to that amount
-    /// once per UTC calendar month, the same way the daily allowance does per day. A no-op when
+    /// when the caller says it is due (<paramref name="grantNow"/>: the plan was just provisioned or
+    /// its rolling month was just renewed, see <see cref="RenewFreePeriodIfOverAsync"/>). A no-op when
     /// the amount is zero (a tariff without a monthly allowance, e.g. Markdown Translator's Free
     /// tariff, which keeps its daily allowance in the same <c>FreeTokensCount</c> bucket) and for
     /// paid tariffs. The ledger delta is the *net* change, so the ledger stays an accurate sum of
@@ -243,8 +259,14 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
         Guid paidEntityId,
         BalanceSubscriptionToken balance,
         DateTime now,
+        bool grantNow,
         CancellationToken cancellationToken)
     {
+        if (!grantNow)
+        {
+            return;
+        }
+
         var monthlyAmount = await context.Tariffs
             .Where(t => t.Id == tariffId && t.IsFree && t.BillingPeriod == BillingPeriod.Forever)
             .Select(t => (long?)t.IncludedTokensCount)
@@ -255,17 +277,9 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
             return;
         }
 
-        var today = DateOnly.FromDateTime(now);
-        if (balance.LastMonthlyGrantAt is { } lastGrant
-            && lastGrant.Year == today.Year
-            && lastGrant.Month == today.Month)
-        {
-            return;
-        }
-
         var delta = monthlyAmount.Value - balance.FreeTokensCount;
         balance.FreeTokensCount = monthlyAmount.Value;
-        balance.LastMonthlyGrantAt = today;
+        balance.LastMonthlyGrantAt = DateOnly.FromDateTime(now);
 
         // Represented purely on the parent row, no SubscriptionTokensSpent/PurchasedTokensSpent
         // child - those tables' Charged* fields are spend-shaped, so reusing them for a grant (an
@@ -281,6 +295,71 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
             FinishedAt = now,
             Delta = delta,
         });
+    }
+
+    /// <summary>
+    /// A Free plan lives in rolling months: its period starts when the plan is provisioned and lasts one
+    /// month. The first read after the month is over starts a new period from that moment - nothing
+    /// runs in between, so the allowance is renewed by the next use, not by a calendar. Returns whether
+    /// a new period was started, which is when the plan's allowance has to be granted again. Paid plans
+    /// have their own period (the paid one) and are never touched here.
+    /// </summary>
+    private async Task<bool> RenewFreePeriodIfOverAsync(
+        SubscriptionEntity subscription,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        if (!await IsFreeTariffAsync(subscription.TariffId, cancellationToken)
+            || now < subscription.CurrentPeriodStartedAt.AddMonths(FreePeriodMonths))
+        {
+            return false;
+        }
+
+        subscription.CurrentPeriodStartedAt = now;
+
+        return true;
+    }
+
+    private Task<bool> IsFreeTariffAsync(Guid tariffId, CancellationToken cancellationToken) =>
+        context.Tariffs.AnyAsync(
+            t => t.Id == tariffId && t.IsFree && t.BillingPeriod == BillingPeriod.Forever,
+            cancellationToken);
+
+    /// <summary>
+    /// The period of the subscription, as Boards needs it to count the issues of the plan and to tell the
+    /// customer when it resets or ends.
+    /// </summary>
+    private async Task<T> WithPeriodAsync<T>(T activeSubscription, Guid subscriptionId, CancellationToken cancellationToken)
+        where T : ActiveSubscription
+    {
+        var now = dateTimeProvider.UtcNow;
+
+        var row = await context.Subscriptions
+            .Where(s => s.Id == subscriptionId)
+            .Select(s => new
+            {
+                s.CurrentPeriodStartedAt,
+                s.CurrentPeriodFinishesAt,
+                IsFree = s.Tariff!.IsFree && s.Tariff.BillingPeriod == BillingPeriod.Forever,
+            })
+            .SingleAsync(cancellationToken);
+
+        if (row.IsFree)
+        {
+            activeSubscription.LimitPeriodStartedAt = row.CurrentPeriodStartedAt;
+            activeSubscription.PeriodEndsAt = row.CurrentPeriodStartedAt.AddMonths(FreePeriodMonths);
+            activeSubscription.PeriodResets = true;
+        }
+        else
+        {
+            // A paid plan keeps counting its limits per calendar month; its own period is the paid one
+            // and ends, it does not reset.
+            activeSubscription.LimitPeriodStartedAt = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            activeSubscription.PeriodEndsAt = row.CurrentPeriodFinishesAt;
+            activeSubscription.PeriodResets = false;
+        }
+
+        return activeSubscription;
     }
 
     /// <summary>
@@ -329,13 +408,16 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                 })
             .SingleAsync(cancellationToken);
 
-        return new LaraueBoardsPersonalActiveSubscription
-        {
-            Code = row.Title,
-            LimitIssuesPerMonth = row.LimitIssuesPerMonth,
-            LimitFreeTeamOrganizationsCount = row.LimitFreeTeamOrganizationsCount,
-            IncludedTokensCount = row.IncludedTokensCount,
-        };
+        return await WithPeriodAsync(
+            new LaraueBoardsPersonalActiveSubscription
+            {
+                Code = row.Title,
+                LimitIssuesPerMonth = row.LimitIssuesPerMonth,
+                LimitFreeTeamOrganizationsCount = row.LimitFreeTeamOrganizationsCount,
+                IncludedTokensCount = row.IncludedTokensCount,
+            },
+            subscriptionId,
+            cancellationToken);
     }
 
     private async Task<ActiveSubscription> GetActiveLaraueBoardsTeamSubscriptionAsync(
@@ -358,12 +440,15 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                 })
             .SingleAsync(cancellationToken);
 
-        return new LaraueBoardsTeamActiveSubscription
-        {
-            Code = row.Title,
-            LimitIssuesPerMonth = row.LimitIssuesPerMonth,
-            IncludedTokensCount = row.IncludedTokensCount,
-        };
+        return await WithPeriodAsync(
+            new LaraueBoardsTeamActiveSubscription
+            {
+                Code = row.Title,
+                LimitIssuesPerMonth = row.LimitIssuesPerMonth,
+                IncludedTokensCount = row.IncludedTokensCount,
+            },
+            subscriptionId,
+            cancellationToken);
     }
 
     private async Task<ActiveSubscription> GetActiveMarkdownTranslatorPersonalSubscriptionAsync(
@@ -381,11 +466,14 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                 (s, t) => new { s.Tariff!.Title, t.IncludedDailyFreeTokensCount })
             .SingleAsync(cancellationToken);
 
-        return new MarkdownTranslatorActiveSubscription
-        {
-            Code = row.Title,
-            IncludedDailyFreeTokensCount = row.IncludedDailyFreeTokensCount,
-        };
+        return await WithPeriodAsync(
+            new MarkdownTranslatorActiveSubscription
+            {
+                Code = row.Title,
+                IncludedDailyFreeTokensCount = row.IncludedDailyFreeTokensCount,
+            },
+            subscriptionId,
+            cancellationToken);
     }
 
     /// <summary>
@@ -409,6 +497,20 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
 public abstract record ActiveSubscription
 {
     public required string Code { get; set; }
+
+    /// <summary>
+    /// The start of the period the plan's limits (e.g. issues per month) are counted in: the rolling month
+    /// of a Free plan, the calendar month of a paid one.
+    /// </summary>
+    public DateTime LimitPeriodStartedAt { get; set; }
+
+    /// <summary>
+    /// When the current period of the plan ends: <see cref="PeriodResets"/> says whether the allowance
+    /// starts over then (a Free plan) or the plan ends (a paid one). Null when it has no end.
+    /// </summary>
+    public DateTime? PeriodEndsAt { get; set; }
+
+    public bool PeriodResets { get; set; }
 }
 
 public sealed record LaraueBoardsPersonalActiveSubscription : ActiveSubscription

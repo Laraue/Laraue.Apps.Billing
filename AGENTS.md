@@ -61,13 +61,23 @@ apps (`Laraue.Apps.Boards`) can reference it - see "NuGet publishing" below.
 - **Free allowances** - a free (`IsFree`, `BillingPeriod.Forever`) tariff never renews, so its tokens
   come from a recurring top-up of `BalanceSubscriptionToken.FreeTokensCount` that *resets* (never
   accumulates) it, applied lazily by `SubscriptionService.GetOrCreateActive*SubscriptionIdAsync`:
-  daily for Markdown Translator (`IncludedDailyFreeTokensCount`), monthly for the Boards Free
-  tariffs (`Tariff.IncludedTokensCount`, 25,000 per UTC month - zero means no monthly allowance).
-  Both write to the same `FreeTokensCount` bucket, so a tariff must have one or the other, not both.
-  A new free subscription starts with an empty `SubscriptionTokensCount` (no one-time grant).
-  The monthly top-up writes a `TariffGrant` ledger row (the net change), because
-  `TokenTransactionReason` is mirrored in the published gRPC contract and a new value would need a
-  contracts release.
+  daily for Markdown Translator (`IncludedDailyFreeTokensCount`, per UTC day), monthly for the Boards Free
+  tariffs (`Tariff.IncludedTokensCount`, 25,000 - zero means no monthly allowance). Both write to the same
+  `FreeTokensCount` bucket, so a tariff must have one or the other, not both. A new free subscription starts
+  with an empty `SubscriptionTokensCount` (no one-time grant). The monthly top-up writes a `TariffGrant`
+  ledger row (the net change), because `TokenTransactionReason` is mirrored in the published gRPC contract
+  and a new value would need a contracts release.
+- **The rolling month of a Free plan** - the monthly allowance is not tied to the calendar. The plan's
+  period starts when the subscription is provisioned (`Subscription.CurrentPeriodStartedAt`, the first
+  lookup) and lasts one month. Nothing runs when it is over: the first read after that starts a new period
+  from that moment (`RenewFreePeriodIfOverAsync`) and grants the allowance again, so the plan is renewed
+  by the next use, whenever it comes, and a read always returns a period that is still on. Boards counts
+  the plan's limits (issues per month) in the same period, so tokens and issues reset together.
+  `ActiveSubscription` carries it over gRPC: `LimitPeriodStartedAt` (the period the limits are counted in:
+  the rolling month of a Free plan, the calendar month of a paid one), `PeriodEndsAt` and `PeriodResets`
+  (true for a Free plan, whose allowance starts over then; false for a paid plan, which ends at the end
+  of the paid period). `TokenBalance.PurchasedTokensExpireAt` is the earliest expiry among the purchased
+  packs that still have tokens.
 - `Payment` - a customer's attempt to pay for a tariff or a token pack (`Kind`), in minor units of
   `CurrencyCode`, with a `Status` (Pending/Paid/Failed/Canceled). Provider-agnostic on purpose: the
   provider is a string code (`Provider`), and its own references live only in `ProviderPaymentId`

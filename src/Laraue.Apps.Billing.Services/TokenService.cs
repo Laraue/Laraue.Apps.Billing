@@ -126,6 +126,12 @@ public sealed record TokenBalance
     public required long FreeTokensCount { get; init; }
     public required long SubscriptionTokensCount { get; init; }
     public required long PurchasedTokensCount { get; init; }
+
+    /// <summary>
+    /// When the purchased tokens that expire first run out, among the packs that still have tokens.
+    /// Null when there are none.
+    /// </summary>
+    public DateTime? PurchasedTokensExpireAt { get; init; }
 }
 
 /// <summary>
@@ -347,6 +353,8 @@ public class TokenService(
             FreeTokensCount = subscriptionBalance.FreeTokensCount,
             SubscriptionTokensCount = subscriptionBalance.SubscriptionTokensCount,
             PurchasedTokensCount = purchasedPacks.Sum(p => p.Available),
+            // The packs come soonest-expiring first.
+            PurchasedTokensExpireAt = purchasedPacks.FirstOrDefault(p => p.Available > 0)?.ExpiredAt,
         };
     }
 
@@ -369,11 +377,12 @@ public class TokenService(
                 p.TokenPack!.TokensCount,
                 context.TokenTransactionPurchasedTokenPacks
                     .Where(c => c.PurchasedTokenPackId == p.Id)
-                    .Sum(c => (long?)c.ChargedAmount) ?? 0))
+                    .Sum(c => (long?)c.ChargedAmount) ?? 0,
+                p.ExpiredAt))
             .ToListAsync(cancellationToken);
     }
 
-    private sealed record PurchasedTokenPackAvailability(Guid Id, long Granted, long Charged)
+    private sealed record PurchasedTokenPackAvailability(Guid Id, long Granted, long Charged, DateTime ExpiredAt)
     {
         public long Available => Granted - Charged;
     }
