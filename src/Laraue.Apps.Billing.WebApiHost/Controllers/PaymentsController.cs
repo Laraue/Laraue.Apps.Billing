@@ -19,36 +19,11 @@ public class PaymentsController(IPaymentsService paymentsService) : ControllerBa
     /// </summary>
     [HttpGet("notify")]
     [HttpPost("notify")]
-    public async Task<ContentResult> Notify(string provider, CancellationToken cancellationToken = default)
+    public async Task<ContentResult> Notify(
+        [FromPaymentCallback] PaymentCallback callback,
+        CancellationToken cancellationToken = default)
     {
-        var parameters = Request.Query.ToDictionary(x => x.Key, x => x.Value.ToString());
-
-        string? body = null;
-        if (Request.HasFormContentType)
-        {
-            var form = await Request.ReadFormAsync(cancellationToken);
-            foreach (var (name, value) in form)
-            {
-                parameters[name] = value.ToString();
-            }
-        }
-        else if (Request.ContentLength is > 0)
-        {
-            using var reader = new StreamReader(Request.Body);
-            body = await reader.ReadToEndAsync(cancellationToken);
-        }
-
-        var acknowledgement = await paymentsService.HandleNotification(
-            new HandlePaymentNotificationRequest
-            {
-                Provider = provider,
-                Parameters = parameters,
-                Headers = Request.Headers.ToDictionary(x => x.Key, x => x.Value.ToString()),
-                Body = body,
-            },
-            cancellationToken);
-
-        return Content(acknowledgement, "text/plain");
+        return Content(await paymentsService.HandleNotification(callback, cancellationToken), "text/plain");
     }
 
     /// <summary>
@@ -56,11 +31,11 @@ public class PaymentsController(IPaymentsService paymentsService) : ControllerBa
     /// </summary>
     [HttpGet("success")]
     [HttpPost("success")]
-    public async Task<IActionResult> Success(string provider, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> Success(
+        [FromPaymentCallback] PaymentCallback callback,
+        CancellationToken cancellationToken = default)
     {
-        var parameters = await ReadParametersAsync(cancellationToken);
-
-        return Redirect(await paymentsService.GetSuccessUrl(provider, parameters, cancellationToken));
+        return Redirect(await paymentsService.GetSuccessUrl(callback, cancellationToken));
     }
 
     /// <summary>
@@ -68,25 +43,10 @@ public class PaymentsController(IPaymentsService paymentsService) : ControllerBa
     /// </summary>
     [HttpGet("fail")]
     [HttpPost("fail")]
-    public async Task<IActionResult> Fail(string provider, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> Fail(
+        [FromPaymentCallback] PaymentCallback callback,
+        CancellationToken cancellationToken = default)
     {
-        var parameters = await ReadParametersAsync(cancellationToken);
-
-        return Redirect(await paymentsService.GetFailUrl(provider, parameters, cancellationToken));
-    }
-
-    private async Task<Dictionary<string, string>> ReadParametersAsync(CancellationToken cancellationToken)
-    {
-        var parameters = Request.Query.ToDictionary(x => x.Key, x => x.Value.ToString());
-        if (Request.HasFormContentType)
-        {
-            var form = await Request.ReadFormAsync(cancellationToken);
-            foreach (var (name, value) in form)
-            {
-                parameters[name] = value.ToString();
-            }
-        }
-
-        return parameters;
+        return Redirect(await paymentsService.GetFailUrl(callback, cancellationToken));
     }
 }

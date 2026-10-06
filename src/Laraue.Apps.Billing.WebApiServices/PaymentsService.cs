@@ -6,10 +6,14 @@ using Microsoft.Extensions.Options;
 
 namespace Laraue.Apps.Billing.WebApiServices;
 
-public sealed record HandlePaymentNotificationRequest
+/// <summary>
+/// What a payment provider's request to one of our callback addresses carries, whichever address it is
+/// (notification, success or fail).
+/// </summary>
+public sealed record PaymentCallback
 {
     /// <summary>
-    /// Code of the provider that sent the notification, taken from the URL.
+    /// Code of the provider that called, taken from the URL.
     /// </summary>
     public required string Provider { get; init; }
 
@@ -28,21 +32,15 @@ public interface IPaymentsService
     /// <summary>
     /// Handles a provider's notification and returns the body the provider expects as the answer.
     /// </summary>
-    Task<string> HandleNotification(HandlePaymentNotificationRequest request, CancellationToken cancellationToken);
+    Task<string> HandleNotification(PaymentCallback callback, CancellationToken cancellationToken);
 
     /// <summary>
     /// Where to send the customer when the provider returns them after a payment. Returning to the
     /// success address is not a proof of payment, only a notification is.
     /// </summary>
-    Task<string> GetSuccessUrl(
-        string provider,
-        IReadOnlyDictionary<string, string> parameters,
-        CancellationToken cancellationToken);
+    Task<string> GetSuccessUrl(PaymentCallback callback, CancellationToken cancellationToken);
 
-    Task<string> GetFailUrl(
-        string provider,
-        IReadOnlyDictionary<string, string> parameters,
-        CancellationToken cancellationToken);
+    Task<string> GetFailUrl(PaymentCallback callback, CancellationToken cancellationToken);
 }
 
 public class PaymentsService(
@@ -51,20 +49,18 @@ public class PaymentsService(
     IOptions<PaymentRedirectsOptions> redirectsOptions,
     ILogger<PaymentsService> logger) : IPaymentsService
 {
-    public async Task<string> HandleNotification(
-        HandlePaymentNotificationRequest request,
-        CancellationToken cancellationToken)
+    public async Task<string> HandleNotification(PaymentCallback callback, CancellationToken cancellationToken)
     {
         // The core service needs a transaction and leaves its lifecycle to the host.
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         var result = await corePaymentService.HandleNotificationAsync(
-            request.Provider,
+            callback.Provider,
             new PaymentNotificationRequest
             {
-                Parameters = request.Parameters,
-                Headers = request.Headers,
-                Body = request.Body,
+                Parameters = callback.Parameters,
+                Headers = callback.Headers,
+                Body = callback.Body,
             },
             cancellationToken);
 
@@ -72,40 +68,40 @@ public class PaymentsService(
 
         logger.LogInformation(
             "Answering the {Provider} notification with '{Acknowledgement}'",
-            request.Provider,
+            callback.Provider,
             result.Acknowledgement);
 
         return result.Acknowledgement;
     }
 
-    public async Task<string> GetSuccessUrl(
-        string provider,
-        IReadOnlyDictionary<string, string> parameters,
-        CancellationToken cancellationToken)
+    public async Task<string> GetSuccessUrl(PaymentCallback callback, CancellationToken cancellationToken)
     {
-        var serviceId = await corePaymentService.FindReturnedPaymentServiceAsync(provider, parameters, cancellationToken);
+        var serviceId = await corePaymentService.FindReturnedPaymentServiceAsync(
+            callback.Provider,
+            callback.Parameters,
+            cancellationToken);
         var url = redirectsOptions.Value.GetSuccessUrl(serviceId);
 
         logger.LogInformation(
             "Customer returned from {Provider} after paying for service {ServiceId}, redirecting to {Url}",
-            provider,
+            callback.Provider,
             serviceId,
             url);
 
         return url;
     }
 
-    public async Task<string> GetFailUrl(
-        string provider,
-        IReadOnlyDictionary<string, string> parameters,
-        CancellationToken cancellationToken)
+    public async Task<string> GetFailUrl(PaymentCallback callback, CancellationToken cancellationToken)
     {
-        var serviceId = await corePaymentService.FindReturnedPaymentServiceAsync(provider, parameters, cancellationToken);
+        var serviceId = await corePaymentService.FindReturnedPaymentServiceAsync(
+            callback.Provider,
+            callback.Parameters,
+            cancellationToken);
         var url = redirectsOptions.Value.GetFailUrl(serviceId);
 
         logger.LogInformation(
             "Customer returned from {Provider} without paying for service {ServiceId}, redirecting to {Url}",
-            provider,
+            callback.Provider,
             serviceId,
             url);
 
