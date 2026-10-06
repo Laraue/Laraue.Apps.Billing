@@ -161,8 +161,8 @@ public class PaymentsControllerTests : BillingIntegrationTest
     }
 
     [Theory]
-    [InlineData("success", "https://boards.laraue.com/payment/success")]
-    [InlineData("fail", "https://boards.laraue.com/payment/fail")]
+    [InlineData("success", "http://localhost:3000/payment/success")]
+    [InlineData("fail", "http://localhost:3000/payment/fail")]
     public async Task ReturnPages_ShouldRedirectToConfiguredUrl_Always(string page, string expectedUrl)
     {
         var response = await _client.GetAsync($"/api/payments/robokassa/{page}?InvId=1");
@@ -172,8 +172,8 @@ public class PaymentsControllerTests : BillingIntegrationTest
     }
 
     [Theory]
-    [InlineData(ServiceId.LaraueBoards, "success", "https://boards.laraue.com/payment/success")]
-    [InlineData(ServiceId.LaraueBoards, "fail", "https://boards.laraue.com/payment/fail")]
+    [InlineData(ServiceId.LaraueBoards, "success", "http://localhost:3000/payment/success")]
+    [InlineData(ServiceId.LaraueBoards, "fail", "http://localhost:3000/payment/fail")]
     [InlineData(ServiceId.MarkdownTranslator, "success", "https://translator.example/payment/success")]
     [InlineData(ServiceId.MarkdownTranslator, "fail", "https://translator.example/payment/fail")]
     public async Task ReturnPages_ShouldRedirectToTheServiceOfThePayment_WhenPaymentIsKnown(
@@ -192,8 +192,8 @@ public class PaymentsControllerTests : BillingIntegrationTest
     }
 
     [Theory]
-    [InlineData("success", "https://boards.laraue.com/payment/success")]
-    [InlineData("fail", "https://boards.laraue.com/payment/fail")]
+    [InlineData("success", "http://localhost:3000/payment/success")]
+    [InlineData("fail", "http://localhost:3000/payment/fail")]
     public async Task ReturnPages_ShouldRedirectToTheDefaultUrl_WhenPaymentCannotBeIdentified(
         string page,
         string expectedUrl)
@@ -206,9 +206,9 @@ public class PaymentsControllerTests : BillingIntegrationTest
     }
 
     [Theory]
-    [InlineData(ServiceId.LaraueBoards, "success", "https://boards.laraue.com/payment/success")]
+    [InlineData(ServiceId.LaraueBoards, "success", "http://localhost:3000/payment/success")]
     [InlineData(ServiceId.MarkdownTranslator, "success", "https://translator.example/payment/success")]
-    [InlineData(ServiceId.LaraueBoards, "fail", "https://boards.laraue.com/payment/fail")]
+    [InlineData(ServiceId.LaraueBoards, "fail", "http://localhost:3000/payment/fail")]
     [InlineData(ServiceId.MarkdownTranslator, "fail", "https://translator.example/payment/fail")]
     public async Task ReturnPages_ShouldRedirectToTheServiceOfThePayment_WhenParametersArePostedAsAForm(
         ServiceId serviceId,

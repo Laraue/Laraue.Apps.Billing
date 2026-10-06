@@ -132,7 +132,9 @@ tariffs, a tariff that `TariffService` cannot map, or tariffs `CorePaymentServic
    `GrpcParsing.ReadDomainServiceId`, `SubscriptionGrpcService` and `SubscriptionService`
    (the active subscription of the service). Changing the `.proto` needs a NuGet release of
    `Laraue.Apps.Billing.Internal.Contracts` - see "NuGet publishing".
-5. Config: `Payments:Redirects:Services:{ServiceId}` with that product's `SuccessUrl`/`FailUrl`. The
+5. Config: `Payments:Redirects:Services:{ServiceId}` with that product's `SuccessUrl`/`FailUrl`. The checked-in
+   `appsettings.json` points them at the local frontend (`http://localhost:3000/...`), like `IsTest: true`;
+   production sets the real addresses in its own configuration. The
    provider sends every customer back to the one `/api/payments/{provider}/success|fail` address;
    Billing finds the payment from the returned parameters and redirects to its service's pages. A
    service without an entry falls back to the global `SuccessUrl`/`FailUrl` - fine only for the first
