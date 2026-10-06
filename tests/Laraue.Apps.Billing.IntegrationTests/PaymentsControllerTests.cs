@@ -51,6 +51,46 @@ public class PaymentsControllerTests : BillingIntegrationTest
     }
 
     [Fact]
+    public async Task Notify_ShouldPayAndFulfilPayment_WhenNotificationIsPostedAsAForm()
+    {
+        var payment = await CreatePendingPaymentAsync();
+        var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["OutSum"] = "334.000000",
+            ["InvId"] = "5002",
+            ["Shp_paymentId"] = payment.Id.ToString(),
+            ["SignatureValue"] = Md5($"334.000000:5002:pass2:Shp_paymentId={payment.Id}"),
+        });
+
+        var response = await _client.PostAsync("/api/payments/robokassa/notify", form);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("OK5002", await response.Content.ReadAsStringAsync());
+
+        var paid = await Context.Payments.AsNoTracking().SingleAsync(x => x.Id == payment.Id);
+        Assert.Equal(PaymentStatus.Paid, paid.Status);
+        Assert.Equal("5002", paid.ProviderPaymentId);
+    }
+
+    [Fact]
+    public async Task Notify_ShouldNotFulfilPayment_WhenPostedSignatureIsInvalid()
+    {
+        var payment = await CreatePendingPaymentAsync();
+        var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["OutSum"] = "334.000000",
+            ["InvId"] = "5002",
+            ["Shp_paymentId"] = payment.Id.ToString(),
+            ["SignatureValue"] = "deadbeef",
+        });
+
+        var response = await _client.PostAsync("/api/payments/robokassa/notify", form);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await AssertNothingGrantedAsync(payment);
+    }
+
+    [Fact]
     public async Task Notify_ShouldNotFulfilTwice_WhenNotificationIsRepeated()
     {
         var payment = await CreatePendingPaymentAsync();
@@ -163,6 +203,31 @@ public class PaymentsControllerTests : BillingIntegrationTest
 
         Assert.Equal(expectedUrl, unknown.Headers.Location!.ToString());
         Assert.Equal(expectedUrl, invalid.Headers.Location!.ToString());
+    }
+
+    [Theory]
+    [InlineData(ServiceId.LaraueBoards, "success", "https://boards.laraue.com/payment/success")]
+    [InlineData(ServiceId.MarkdownTranslator, "success", "https://translator.example/payment/success")]
+    [InlineData(ServiceId.LaraueBoards, "fail", "https://boards.laraue.com/payment/fail")]
+    [InlineData(ServiceId.MarkdownTranslator, "fail", "https://translator.example/payment/fail")]
+    public async Task ReturnPages_ShouldRedirectToTheServiceOfThePayment_WhenParametersArePostedAsAForm(
+        ServiceId serviceId,
+        string page,
+        string expectedUrl)
+    {
+        var payment = await CreatePendingPaymentAsync();
+        payment.ServiceId = serviceId;
+        await Context.SaveChangesAsync();
+        var form = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["InvId"] = "1",
+            ["Shp_paymentId"] = payment.Id.ToString(),
+        });
+
+        var response = await _client.PostAsync($"/api/payments/robokassa/{page}", form);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal(expectedUrl, response.Headers.Location!.ToString());
     }
 
     private async Task<Payment> CreatePendingPaymentAsync()
