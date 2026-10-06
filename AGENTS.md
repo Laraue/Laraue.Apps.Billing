@@ -176,7 +176,7 @@ RUB rounds up to the nearest whole ruble, USD rounds to the nearest cent. `Forma
 `CurrencyRate` properties they need (`rateToUsd`, `roundingStep`, `roundingMode`, `symbol`) rather
 than the whole `CurrencyRate` model. The reads that show prices (`WebApiServices.TariffService`,
 `TokenPackService`) and `CorePaymentService` (the amount a checkout charges) are its callers; the reads go
-through the `Convert`/`Format` helpers of `CurrencyRateExtensions`, so a payment and the price shown for it
+through `ICurrencyRateService.ConvertPrice`/`FormatPrice`, so a payment and the price shown for it
 always agree. Don't hand-round prices elsewhere - go through `PriceCalculator` so a currency's rounding
 policy stays defined in one place (`CurrencyRatesData`).
 
@@ -208,7 +208,7 @@ Solution: `Laraue.Apps.Billing.sln`
 - `src/Laraue.Apps.Billing.WebApiServices` - `WebApiHost`'s own DI composition, *reads* and DTO shapes
   over `Services`. Owns `ITariffService`/`TariffService` and `ITokenPackService`/`TokenPackService` (they
   query `DatabaseContext` directly, project onto the response DTOs, and price the amounts through
-  `CurrencyRateExtensions` and `PriceCalculator`), the request/response types and the
+  `ICurrencyRateService` and `PriceCalculator`), the request/response types and the
   `Subscription`/`PersonalSubscription`/`TeamSubscription` JSON-polymorphic hierarchy, `PaymentsService`
   (opens the transaction around the core payment service) and its own `Resources/Errors.resx`.
   `ServiceCollectionExtensions.AddWebApiServices()` registers them. `WebApiHost` doesn't reference

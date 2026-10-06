@@ -26,6 +26,7 @@ public interface ITariffService
 /// </summary>
 public class TariffService(
     DatabaseContext context,
+    ICurrencyRateService currencyRateService,
     IPaymentProviderRegistry paymentProviderRegistry) : ITariffService
 {
     public async Task<GetServiceTariffsResponse> GetServiceTariffs(
@@ -40,7 +41,7 @@ public class TariffService(
         }
 
         var currencyCode = paymentProviderRegistry.ResolveCurrency(request.CurrencyCode);
-        var currencyRate = await context.GetCurrencyRateAsync(currencyCode, cancellationToken);
+        var currencyRate = await currencyRateService.GetCurrencyRateAsync(currencyCode, cancellationToken);
 
         var personalTariffs = request.ServiceId switch
         {
@@ -89,9 +90,9 @@ public class TariffService(
             {
                 Id = x.Id,
                 Title = x.Title,
-                Price = currencyRate.Convert(x.Price),
+                Price = currencyRateService.ConvertPrice(currencyRate, x.Price),
                 CurrencyCode = currencyRate.Code,
-                FormattedPrice = currencyRate.Format(x.Price),
+                FormattedPrice = currencyRateService.FormatPrice(currencyRate, x.Price),
                 BillingDuration = GetBillingDuration(x.BillingPeriod),
                 BillingPeriod = x.BillingPeriod,
                 IncludedTokensCount = x.IncludedTokensCount,
@@ -124,9 +125,9 @@ public class TariffService(
             {
                 Id = x.Id,
                 Title = x.Title,
-                Price = currencyRate.Convert(x.Price),
+                Price = currencyRateService.ConvertPrice(currencyRate, x.Price),
                 CurrencyCode = currencyRate.Code,
-                FormattedPrice = currencyRate.Format(x.Price),
+                FormattedPrice = currencyRateService.FormatPrice(currencyRate, x.Price),
                 BillingDuration = GetBillingDuration(x.BillingPeriod),
                 BillingPeriod = x.BillingPeriod,
                 IncludedTokensCount = x.IncludedTokensCount,
@@ -158,9 +159,9 @@ public class TariffService(
             {
                 Id = x.Id,
                 Title = x.Title,
-                Price = currencyRate.Convert(x.Price),
+                Price = currencyRateService.ConvertPrice(currencyRate, x.Price),
                 CurrencyCode = currencyRate.Code,
-                FormattedPrice = currencyRate.Format(x.Price),
+                FormattedPrice = currencyRateService.FormatPrice(currencyRate, x.Price),
                 BillingDuration = GetBillingDuration(x.BillingPeriod),
                 BillingPeriod = x.BillingPeriod,
                 IncludedTokensCount = x.IncludedTokensCount,

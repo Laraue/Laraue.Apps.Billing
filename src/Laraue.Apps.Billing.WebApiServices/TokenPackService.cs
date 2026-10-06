@@ -18,6 +18,7 @@ public interface ITokenPackService
 /// </summary>
 public class TokenPackService(
     DatabaseContext context,
+    ICurrencyRateService currencyRateService,
     IPaymentProviderRegistry paymentProviderRegistry) : ITokenPackService
 {
     public async Task<GetTokenPacksResponse> GetTokenPacks(
@@ -26,7 +27,7 @@ public class TokenPackService(
     {
         // Only currencies a provider can charge in are offered, like for the tariffs.
         var currencyCode = paymentProviderRegistry.ResolveCurrency(request.CurrencyCode);
-        var currencyRate = await context.GetCurrencyRateAsync(currencyCode, cancellationToken);
+        var currencyRate = await currencyRateService.GetCurrencyRateAsync(currencyCode, cancellationToken);
 
         var rows = await context.TokenPacks
             .Where(x => x.IsActive)
@@ -53,9 +54,9 @@ public class TokenPackService(
                     Code = x.Code,
                     Title = x.Title,
                     TokensCount = x.TokensCount,
-                    Price = currencyRate.Convert(x.Price),
+                    Price = currencyRateService.ConvertPrice(currencyRate, x.Price),
                     CurrencyCode = currencyRate.Code,
-                    FormattedPrice = currencyRate.Format(x.Price),
+                    FormattedPrice = currencyRateService.FormatPrice(currencyRate, x.Price),
                     ExpirationDuration = x.ExpirationDuration,
                     ExpirationPeriod = x.ExpirationPeriod,
                 })
