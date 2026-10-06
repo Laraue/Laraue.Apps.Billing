@@ -47,6 +47,10 @@ apps (`Laraue.Apps.Boards`) can reference it - see "NuGet publishing" below.
   entry, not a schema change.
 - `TokenPack` - a one-off token top-up purchasable outside a subscription (`Price`, `TokensCount`,
   expiration).
+  Not tied to a service: the tokens go to the paying user or organization. `GET /api/token-packs`
+  (`TokenPacksController`/`TokenPackService`, public) returns the active ones, cheapest first, priced like
+  the tariffs and only in a currency a registered provider charges in; a pack is bought through the same
+  checkout as a plan (`PaymentKind.TokenPack`).
 - `Subscription` - an active/cancelled paid plan tying a `PaidEntityId` (user or org id) to a
   `Tariff`, with an `OwnerId` (who's actually paying, which can differ from who's covered - e.g. an
   org admin paying for a team plan).
@@ -140,8 +144,8 @@ tariffs, a tariff that `TariffService` cannot map, or tariffs `CorePaymentServic
    `DbSet`/mapping in `DatabaseContext`, the tariffs in `Data/{Service}TariffsData.cs` (at least one
    paid one) and a migration. Free allowances need a `BalanceSubscriptionToken` rule, see "Free
    allowances" above.
-2. Reading tariffs: the `Core{Service}...Tariff` records and their loading in `CoreTariffService`, and
-   the mapping to the public `{Service}...Subscription` types in `WebApiServices/TariffService`.
+2. Reading tariffs: the query for the service's tariffs and its projection onto the public
+   `{Service}...Subscription` types in `WebApiServices/TariffService`.
 3. Paying: add the service to the item check in `CorePaymentService.GetTariffItemAsync` (the switch
    on `ServiceId`, personal and team tables). A service missing there can never be bought.
 4. gRPC: the service in `subscription.proto` (its `ServiceId` value, the `oneof` payload message),
@@ -170,12 +174,11 @@ RUB rounds up to the nearest whole ruble, USD rounds to the nearest cent. `Forma
 `ConvertPrice` and appends the currency symbol, using the number of decimal places implied by
 `RoundingStep` (so a `RoundingStep` of `1M` formats with zero decimals). Both take the individual
 `CurrencyRate` properties they need (`rateToUsd`, `roundingStep`, `roundingMode`, `symbol`) rather
-than the whole `CurrencyRate` model. `CoreTariffService` (also in `Services`) is the only caller -
-it applies `PriceCalculator` while building each `CoreTariff` row, so `Price`/`FormattedPrice`/
-`BillingDuration` arrive already computed. A host's `Host{Services}` layer never calls
-`PriceCalculator` itself and never re-derives a price or billing duration - see "Project layout".
-Don't hand-round prices elsewhere - go through `PriceCalculator` so a currency's rounding policy
-stays defined in one place (`CurrencyRatesData`).
+than the whole `CurrencyRate` model. The reads that show prices (`WebApiServices.TariffService`,
+`TokenPackService`) and `CorePaymentService` (the amount a checkout charges) are its callers; the reads go
+through `ICurrencyRateService.ConvertPrice`/`FormatPrice`, so a payment and the price shown for it
+always agree. Don't hand-round prices elsewhere - go through `PriceCalculator` so a currency's rounding
+policy stays defined in one place (`CurrencyRatesData`).
 
 ## Project layout
 
@@ -193,34 +196,24 @@ Solution: `Laraue.Apps.Billing.sln`
   `Payment.ProviderPaymentId`; our payment id travels as the custom `Shp_paymentId` parameter, which
   Robokassa echoes and signs. Another provider = another project like this one, nothing else changes.
 - `src/Laraue.Apps.Billing.Services` - **core** business logic shared across hosts, not tied to any
-  one of them (`CoreTariffService`, `SubscriptionService`, ...), plus `Resources/Errors.resx` for
-  user-facing error text. "Core" here means: does all the actual computation, but no host-facing
-  response shape. `CoreTariffService` validates the currency code and, for each per-service tariff
-  row, computes `Price`/`FormattedPrice` (via `PriceCalculator`) and `BillingDuration` (null when
-  `BillingPeriod` is `Forever`, else `1`) up front, returning fully-priced
-  `CoreLaraueBoardsPersonalTariff`/`CoreMarkdownTranslatorPersonalTariff`/`CoreLaraueBoardsTeamTariff`
-  rows (all deriving from `CoreTariff`), already ordered by price. It does not know about
-  `GetServiceTariffsResponse`, the `PersonalSubscription`/`TeamSubscription` JSON-polymorphic
-  hierarchy, or any other per-host DTO. A host's `Host{Services}` layer only maps a `CoreTariff` row
-  1:1 onto its own DTO fields (switch on the concrete `CoreTariff` subtype to pick the right DTO
-  type) - it must not recompute a price, a billing duration, or otherwise duplicate `Services`
-  logic; if a mapping needs a derived value, that derivation belongs in `Services`, not repeated (or
-  worse, drifting) across every host.
+  one of them (`SubscriptionService`, `TokenService`, `CorePaymentService`, `PriceCalculator`, ...), plus
+  `Resources/Errors.resx` for user-facing error text. "Core" means domain logic that changes state
+  (reserving tokens, fulfilling a payment, provisioning a subscription) and the helpers it shares. Core
+  services do not hold read methods that only exist to feed a response: those are queries of a host and
+  live in that host's `*Services` project (see below). A core service has no host-facing response shape.
 - `src/Laraue.Apps.Billing.WebApiHost` - the public ASP.NET host: `Program.cs`,
   `WebApplicationBuilderExtensions` (DI wiring split into `AddDatabaseServices`/
   `AddApplicationServices`), and its (thin) `Controllers/TariffsController`. Controllers stay in the
   host - unlike the gRPC side below, there's no separate project for them.
-- `src/Laraue.Apps.Billing.WebApiServices` - `WebApiHost`'s own DI composition *and DTO mapping*
-  layer over `Services`. Owns `ITariffService`/`TariffService`, `GetServiceTariffsRequest`/
-  `GetServiceTariffsResponse` and the `Subscription`/`PersonalSubscription`/`TeamSubscription`
-  JSON-polymorphic response hierarchy - `TariffService` here calls `ICoreTariffService` for
-  already-priced `CoreTariff` rows and copies each one's fields onto the matching `*Subscription`
-  record (switch on the `CoreTariff` subtype); it does no price/billing-duration math of its own.
-  `ServiceCollectionExtensions.AddWebApiServices()` registers both `ICoreTariffService`/
-  `CoreTariffService` and `ITariffService`/`TariffService`. `WebApiHost` doesn't reference `Services`
-  directly - it only references `WebApiServices`, which owns the `Services` reference;
-  `TariffsController` (in the host) depends only on `ITariffService` from `WebApiServices`, not on
-  anything from `Services`.
+- `src/Laraue.Apps.Billing.WebApiServices` - `WebApiHost`'s own DI composition, *reads* and DTO shapes
+  over `Services`. Owns `ITariffService`/`TariffService` and `ITokenPackService`/`TokenPackService` (they
+  query `DatabaseContext` directly, project onto the response DTOs, and price the amounts through
+  `ICurrencyRateService` and `PriceCalculator`), the request/response types and the
+  `Subscription`/`PersonalSubscription`/`TeamSubscription` JSON-polymorphic hierarchy, `PaymentsService`
+  (opens the transaction around the core payment service) and its own `Resources/Errors.resx`.
+  `ServiceCollectionExtensions.AddWebApiServices()` registers them. `WebApiHost` doesn't reference
+  `Services` directly - it only references `WebApiServices`, which owns the `Services` reference; the
+  controllers in the host depend only on the interfaces of `WebApiServices`.
 - `src/Laraue.Apps.Billing.InternalApiServices` - the gRPC-facing implementation of
   `Internal.Contracts` (`SubscriptionGrpcService`, mapping wire types <-> `Laraue.Apps.Billing.Services`
   DTOs) plus its own DI composition (`ServiceCollectionExtensions.AddInternalApiServices()` registers
@@ -245,14 +238,13 @@ Solution: `Laraue.Apps.Billing.sln`
   reintroduce this bug.
 
 Each host follows a `Host -> Host{Services} -> Services` layering: the shared `Services` project
-stays host-agnostic (core domain logic + raw/`Core*` DTOs, no per-host response shape) and is never
+stays host-agnostic (core domain logic, no per-host response shape, no reads that only feed a response) and is never
 referenced directly by a host project (`WebApiHost`, `InternalApiHost`) - only by that host's own
 `*Services` project (`WebApiServices`, `InternalApiServices`), which exposes an `Add{Host}Services()`
 `IServiceCollection` extension the host calls instead of registering `Services` types itself, and
-which owns projecting core data into that host's own DTOs. When adding a new host, give it its own
-`Host{Services}` project (with its own DTOs/projection logic) rather than referencing `Services` -
-or its DTO shapes - from the host directly, and rather than adding a host-specific DTO or projection
-onto a `Core*` type in `Services`.
+which owns that host's reads and projects them into its own DTOs. When adding a new host, give it its own
+`Host{Services}` project (with its own DTOs and queries) rather than referencing `Services` from the host
+directly, and rather than adding a host-specific read or DTO to a core service in `Services`.
 - `tests/Laraue.Apps.Billing.IntegrationTests` - the only test project, structured the same way as
   `Laraue.Apps.Boards`'s integration tests (see "Testing" below).
 
@@ -270,8 +262,8 @@ an existing entry's shape.
 
 ## Error handling
 
-`CoreTariffService` throws `Laraue.Core.Exceptions.Web.BadRequestException` for both an unknown
-`ServiceId` and an unknown currency code - both are client input errors (400), not server errors.
+`TariffService` and `TokenPackService` throw `Laraue.Core.Exceptions.Web.BadRequestException` for an unknown
+`ServiceId` and for a currency no provider charges in - both are client input errors (400), not server errors.
 `ExceptionHandleMiddleware` (from the `Laraue.Core.Exceptions` package, registered in
 `AddApplicationServices` and added via `app.UseMiddleware<ExceptionHandleMiddleware>()` in
 `Program.cs`) catches these and any other `HttpException` and renders them as a JSON
@@ -286,12 +278,11 @@ checking the tests still pass either way - it doesn't need fixing.
 
 Follow `Laraue.Apps.Boards`'s conventions: default to plain EF Core LINQ, project straight to a
 shape with `.Select(...)` instead of `Include`-ing full entity graphs (see
-`CoreTariffService.GetLaraueBoardsPersonalTariffsAsync` etc. for the pattern - an anonymous
+`WebApiServices.TariffService.GetLaraueBoardsPersonalTariffsAsync` etc. for the pattern - an anonymous
 projection of just the columns needed, `ToListAsync`, then a second in-memory `.Select(...)` into
-the `Core*` record that also applies `PriceCalculator` to the raw `Price` column; the second step
-has to happen client-side since `PriceCalculator`'s rounding isn't SQL-translatable). A host's
-`*Services` project then maps those already-priced `Core*` records 1:1 onto its own response shape
-(see `WebApiServices.TariffService`) - EF Core itself is never queried outside `Services`.
+the response DTO that also prices the raw `Price` column; the second step has to happen client-side
+since `PriceCalculator`'s rounding isn't SQL-translatable). Reads that feed a response belong to the
+host's `*Services` project, not to a core service.
 
 **Transactions belong to the host.** A core service in `Services` never opens a transaction: one that
 writes several rows or takes `PgAdvisoryXactLock` starts with `context.Database.EnsureTransactionStarted()`

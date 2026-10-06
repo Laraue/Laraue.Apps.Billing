@@ -12,8 +12,9 @@ public static class ServiceCollectionExtensions
     {
         public IServiceCollection AddWebApiServices(IConfiguration configuration)
         {
-            services.AddScoped<ICoreTariffService, CoreTariffService>();
+            services.AddScoped<ICurrencyRateService, CurrencyRateService>();
             services.AddScoped<ITariffService, TariffService>();
+            services.AddScoped<ITokenPackService, TokenPackService>();
 
             services
                 .AddOptions<PaymentRedirectsOptions>()

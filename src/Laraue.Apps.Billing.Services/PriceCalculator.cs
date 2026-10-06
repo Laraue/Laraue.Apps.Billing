@@ -6,7 +6,7 @@ namespace Laraue.Apps.Billing.Services;
 /// <summary>
 /// Converts a USD-cent price into a target currency. Shared by every host that needs to display a
 /// price - takes only the currency properties it needs rather than a whole <see cref="CurrencyRate"/>,
-/// so it's usable from a raw <see cref="CoreTariff"/> or any other price source.
+/// so it is usable from any price source, a tariff or a token pack row for example.
 /// </summary>
 public static class PriceCalculator
 {
