@@ -23,6 +23,8 @@ public interface ICorePaymentService
     /// <summary>
     /// Handles a notification of the given provider. Safe to call repeatedly for the same payment:
     /// a payment is fulfilled only once, a repeated notification just gets the acknowledgement again.
+    /// Needs a database transaction started by the caller, which commits it: the changes are saved here
+    /// but only become final with that commit.
     /// </summary>
     Task<PaymentNotificationResult> HandleNotificationAsync(
         string providerCode,
@@ -254,6 +256,8 @@ public class CorePaymentService(
         PaymentNotificationRequest request,
         CancellationToken cancellationToken)
     {
+        context.Database.EnsureTransactionStarted();
+
         var provider = providerRegistry.Get(providerCode);
 
         // Names only: the values include the provider's signature.
@@ -286,8 +290,6 @@ public class CorePaymentService(
             notification.Outcome,
             notification.AmountMinorUnits,
             notification.CurrencyCode);
-
-        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         var paymentId = await FindPaymentIdAsync(provider.Code, notification, cancellationToken);
 
@@ -355,7 +357,6 @@ public class CorePaymentService(
         payment.ProviderData = notification.ProviderData ?? payment.ProviderData;
 
         await context.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
 
         logger.LogInformation(
             "Notification of payment {PaymentId} handled, status {Status}",

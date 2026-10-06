@@ -121,6 +121,21 @@ public class CorePaymentServiceTests : BillingIntegrationTest
             CancellationToken.None));
     }
 
+    [Fact]
+    public async Task HandleNotificationAsync_ShouldRequireATransactionStartedByTheCaller()
+    {
+        var request = new PaymentNotificationRequest
+        {
+            Parameters = new Dictionary<string, string>(),
+            Headers = new Dictionary<string, string>(),
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _paymentService.HandleNotificationAsync(
+            "robokassa",
+            request,
+            CancellationToken.None));
+    }
+
     private static CreatePaymentRequest CreateRequest(
         PaymentKind kind,
         Guid itemId,

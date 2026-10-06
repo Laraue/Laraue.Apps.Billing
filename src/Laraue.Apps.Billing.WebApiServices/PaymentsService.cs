@@ -1,4 +1,6 @@
+using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.Services.Payments;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -44,6 +46,7 @@ public interface IPaymentsService
 }
 
 public class PaymentsService(
+    DatabaseContext context,
     ICorePaymentService corePaymentService,
     IOptions<PaymentRedirectsOptions> redirectsOptions,
     ILogger<PaymentsService> logger) : IPaymentsService
@@ -52,6 +55,9 @@ public class PaymentsService(
         HandlePaymentNotificationRequest request,
         CancellationToken cancellationToken)
     {
+        // The core service needs a transaction and leaves its lifecycle to the host.
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
         var result = await corePaymentService.HandleNotificationAsync(
             request.Provider,
             new PaymentNotificationRequest
@@ -61,6 +67,8 @@ public class PaymentsService(
                 Body = request.Body,
             },
             cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
 
         logger.LogInformation(
             "Answering the {Provider} notification with '{Acknowledgement}'",
