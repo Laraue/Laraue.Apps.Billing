@@ -1,5 +1,6 @@
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
+using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.DataAccess.Entities;
 using Laraue.Apps.Billing.Services;
 using Laraue.Core.DataAccess.Contracts;
@@ -19,18 +20,20 @@ namespace Laraue.Apps.Billing.InternalApiServices;
 /// (registered via <c>AddLaraueGrpcExceptionHandling()</c> in <c>Program.cs</c>) translates them
 /// into <see cref="StatusCode.NotFound"/>/<see cref="StatusCode.InvalidArgument"/> globally.
 /// </summary>
-public sealed class TokenGrpcService(ITokenService tokenService)
+public sealed class TokenGrpcService(DatabaseContext dbContext, ITokenService tokenService)
     : ContractsTokenService.TokenServiceBase
 {
     public override async Task<Internal.Contracts.ReserveTokensResponse> ReservePersonalTokens(
         Internal.Contracts.ReservePersonalTokensRequest request,
         ServerCallContext context)
     {
-        var result = await tokenService.TryReservePersonalTokensAsync(
-            GrpcParsing.ReadDomainServiceId(context),
-            GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
-            request.InputTokensCount,
-            request.MaxOutputTokensCount,
+        var result = await dbContext.Database.InTransactionAsync(
+            () => tokenService.TryReservePersonalTokensAsync(
+                GrpcParsing.ReadDomainServiceId(context),
+                GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
+                request.InputTokensCount,
+                request.MaxOutputTokensCount,
+                context.CancellationToken),
             context.CancellationToken);
 
         return ToResponse(result);
@@ -40,12 +43,14 @@ public sealed class TokenGrpcService(ITokenService tokenService)
         Internal.Contracts.ReserveOrganizationTokensRequest request,
         ServerCallContext context)
     {
-        var result = await tokenService.TryReserveOrganizationTokensAsync(
-            GrpcParsing.ReadDomainServiceId(context),
-            GrpcParsing.ParseGuid(request.OrganizationId, nameof(request.OrganizationId)),
-            GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
-            request.InputTokensCount,
-            request.MaxOutputTokensCount,
+        var result = await dbContext.Database.InTransactionAsync(
+            () => tokenService.TryReserveOrganizationTokensAsync(
+                GrpcParsing.ReadDomainServiceId(context),
+                GrpcParsing.ParseGuid(request.OrganizationId, nameof(request.OrganizationId)),
+                GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
+                request.InputTokensCount,
+                request.MaxOutputTokensCount,
+                context.CancellationToken),
             context.CancellationToken);
 
         return ToResponse(result);
@@ -68,9 +73,11 @@ public sealed class TokenGrpcService(ITokenService tokenService)
         Internal.Contracts.CommitTokensSpentRequest request,
         ServerCallContext context)
     {
-        await tokenService.CommitTokensSpentAsync(
-            GrpcParsing.ParseGuid(request.TokenTransactionId, nameof(request.TokenTransactionId)),
-            request.ActualOutputTokensCount,
+        await dbContext.Database.InTransactionAsync(
+            () => tokenService.CommitTokensSpentAsync(
+                GrpcParsing.ParseGuid(request.TokenTransactionId, nameof(request.TokenTransactionId)),
+                request.ActualOutputTokensCount,
+                context.CancellationToken),
             context.CancellationToken);
 
         return new Internal.Contracts.CommitTokensSpentResponse();
@@ -80,9 +87,11 @@ public sealed class TokenGrpcService(ITokenService tokenService)
         Internal.Contracts.CancelTokensReservationRequest request,
         ServerCallContext context)
     {
-        await tokenService.CancelTokensReservationAsync(
-            GrpcParsing.ParseGuid(request.TokenTransactionId, nameof(request.TokenTransactionId)),
-            request.Error,
+        await dbContext.Database.InTransactionAsync(
+            () => tokenService.CancelTokensReservationAsync(
+                GrpcParsing.ParseGuid(request.TokenTransactionId, nameof(request.TokenTransactionId)),
+                request.Error,
+                context.CancellationToken),
             context.CancellationToken);
 
         return new Internal.Contracts.CancelTokensReservationResponse();
@@ -92,9 +101,11 @@ public sealed class TokenGrpcService(ITokenService tokenService)
         Internal.Contracts.GetPersonalTokenBalanceRequest request,
         ServerCallContext context)
     {
-        var balance = await tokenService.GetPersonalTokenBalanceAsync(
-            GrpcParsing.ReadDomainServiceId(context),
-            GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
+        var balance = await dbContext.Database.InTransactionAsync(
+            () => tokenService.GetPersonalTokenBalanceAsync(
+                GrpcParsing.ReadDomainServiceId(context),
+                GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
+                context.CancellationToken),
             context.CancellationToken);
 
         return ToResponse(balance);
@@ -104,9 +115,11 @@ public sealed class TokenGrpcService(ITokenService tokenService)
         Internal.Contracts.GetOrganizationTokenBalanceRequest request,
         ServerCallContext context)
     {
-        var balance = await tokenService.GetOrganizationTokenBalanceAsync(
-            GrpcParsing.ReadDomainServiceId(context),
-            GrpcParsing.ParseGuid(request.OrganizationId, nameof(request.OrganizationId)),
+        var balance = await dbContext.Database.InTransactionAsync(
+            () => tokenService.GetOrganizationTokenBalanceAsync(
+                GrpcParsing.ReadDomainServiceId(context),
+                GrpcParsing.ParseGuid(request.OrganizationId, nameof(request.OrganizationId)),
+                context.CancellationToken),
             context.CancellationToken);
 
         return ToResponse(balance);

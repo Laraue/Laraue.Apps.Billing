@@ -35,7 +35,7 @@ public sealed class Program
 
         // Reused as-is rather than duplicated - it's plain DI composition (ISubscriptionService,
         // ITokenService, IDateTimeProvider), nothing gRPC/API-specific despite the project name.
-        builder.Services.AddInternalApiServices();
+        builder.Services.AddInternalApiServices(builder.Configuration);
 
         builder.Services.AddBackgroundJob<CancelStaleTokenReservationsJob, EmptyJobData>(
             "CancelStaleTokenReservationsJob");

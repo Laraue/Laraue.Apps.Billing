@@ -44,7 +44,9 @@ public class CancelStaleTokenReservationsJob(
         {
             try
             {
-                await tokenService.CancelTokensReservationAsync(id, "Reservation timed out", stoppingToken);
+                await context.Database.InTransactionAsync(
+                    () => tokenService.CancelTokensReservationAsync(id, "Reservation timed out", stoppingToken),
+                    stoppingToken);
             }
             catch (Exception ex)
             {

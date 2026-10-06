@@ -35,8 +35,8 @@ public class CancelStaleTokenReservationsJobTests : BillingIntegrationTest
         var paidEntityId = Guid.NewGuid();
         await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 1000);
 
-        var result = await _tokenService.TryReservePersonalTokensAsync(
-            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None);
+        var result = await InTransaction(() => _tokenService.TryReservePersonalTokensAsync(
+            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None));
 
         await BackdateTransactionAsync(result.TokenTransactionId!.Value, TimeSpan.FromMinutes(31));
 
@@ -56,8 +56,8 @@ public class CancelStaleTokenReservationsJobTests : BillingIntegrationTest
         var paidEntityId = Guid.NewGuid();
         await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 1000);
 
-        var result = await _tokenService.TryReservePersonalTokensAsync(
-            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None);
+        var result = await InTransaction(() => _tokenService.TryReservePersonalTokensAsync(
+            ServiceId.LaraueBoards, paidEntityId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None));
 
         await BackdateTransactionAsync(result.TokenTransactionId!.Value, TimeSpan.FromMinutes(10));
 
@@ -76,10 +76,10 @@ public class CancelStaleTokenReservationsJobTests : BillingIntegrationTest
         await SeedActiveSubscriptionAsync(firstEntityId, freeTokens: 1000);
         await SeedActiveSubscriptionAsync(secondEntityId, freeTokens: 1000);
 
-        var first = await _tokenService.TryReservePersonalTokensAsync(
-            ServiceId.LaraueBoards, firstEntityId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None);
-        var second = await _tokenService.TryReservePersonalTokensAsync(
-            ServiceId.LaraueBoards, secondEntityId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None);
+        var first = await InTransaction(() => _tokenService.TryReservePersonalTokensAsync(
+            ServiceId.LaraueBoards, firstEntityId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None));
+        var second = await InTransaction(() => _tokenService.TryReservePersonalTokensAsync(
+            ServiceId.LaraueBoards, secondEntityId, inputTokensCount: 100, maxOutputTokensCount: 200, CancellationToken.None));
 
         await BackdateTransactionAsync(first.TokenTransactionId!.Value, TimeSpan.FromMinutes(31));
         await BackdateTransactionAsync(second.TokenTransactionId!.Value, TimeSpan.FromMinutes(31));
@@ -90,6 +90,7 @@ public class CancelStaleTokenReservationsJobTests : BillingIntegrationTest
             .ThrowsAsync(new InvalidOperationException("boom"));
         tokenServiceMock
             .Setup(x => x.CancelTokensReservationAsync(second.TokenTransactionId!.Value, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            // The job starts the transaction, as a host does.
             .Returns((Guid id, string error, CancellationToken ct) => _tokenService.CancelTokensReservationAsync(id, error, ct));
 
         var job = new CancelStaleTokenReservationsJob(Context, tokenServiceMock.Object, _dateTimeProvider, NullLogger<CancelStaleTokenReservationsJob>.Instance);

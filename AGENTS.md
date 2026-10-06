@@ -275,6 +275,13 @@ has to happen client-side since `PriceCalculator`'s rounding isn't SQL-translata
 `*Services` project then maps those already-priced `Core*` records 1:1 onto its own response shape
 (see `WebApiServices.TariffService`) - EF Core itself is never queried outside `Services`.
 
+**Transactions belong to the host.** A core service in `Services` never opens a transaction: one that
+writes several rows or takes `PgAdvisoryXactLock` starts with `context.Database.EnsureTransactionStarted()`
+and leaves the lifecycle to its caller. The host (gRPC service, `WebApiServices`, a job) runs the call
+through `context.Database.InTransactionAsync(...)`, which commits on success and rolls back on an
+exception. Tests that call a core service directly do the same through `InTransaction(...)` of
+`BillingIntegrationTest`.
+
 ## Testing
 
 `tests/Laraue.Apps.Billing.IntegrationTests` mirrors `Laraue.Apps.Boards.IntegrationTests`'s

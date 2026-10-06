@@ -1,3 +1,4 @@
+using Laraue.Apps.Billing.DataAccess;
 using Grpc.Core;
 using Laraue.Apps.Billing.Services;
 // The generated proto service is also called `SubscriptionService`, colliding with the business
@@ -18,16 +19,18 @@ namespace Laraue.Apps.Billing.InternalApiServices;
 /// report either - <see cref="ISubscriptionService"/> auto-provisions Free onto a paid entity with
 /// none yet, so both rpcs below always return a real subscription.
 /// </summary>
-public sealed class SubscriptionGrpcService(ISubscriptionService subscriptionService)
+public sealed class SubscriptionGrpcService(DatabaseContext dbContext, ISubscriptionService subscriptionService)
     : ContractsSubscriptionService.SubscriptionServiceBase
 {
     public override async Task<Internal.Contracts.ActiveSubscriptionResponse> GetActivePersonalSubscription(
         Internal.Contracts.GetActivePersonalSubscriptionRequest request,
         ServerCallContext context)
     {
-        var subscription = await subscriptionService.GetActivePersonalSubscriptionAsync(
-            GrpcParsing.ToDomainServiceId(request.ServiceId),
-            GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
+        var subscription = await dbContext.Database.InTransactionAsync(
+            () => subscriptionService.GetActivePersonalSubscriptionAsync(
+                GrpcParsing.ToDomainServiceId(request.ServiceId),
+                GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
+                context.CancellationToken),
             context.CancellationToken);
 
         return ToResponse(subscription);
@@ -37,9 +40,11 @@ public sealed class SubscriptionGrpcService(ISubscriptionService subscriptionSer
         Internal.Contracts.GetActiveOrganizationSubscriptionRequest request,
         ServerCallContext context)
     {
-        var subscription = await subscriptionService.GetActiveOrganizationSubscriptionAsync(
-            GrpcParsing.ToDomainServiceId(request.ServiceId),
-            GrpcParsing.ParseGuid(request.OrganizationId, nameof(request.OrganizationId)),
+        var subscription = await dbContext.Database.InTransactionAsync(
+            () => subscriptionService.GetActiveOrganizationSubscriptionAsync(
+                GrpcParsing.ToDomainServiceId(request.ServiceId),
+                GrpcParsing.ParseGuid(request.OrganizationId, nameof(request.OrganizationId)),
+                context.CancellationToken),
             context.CancellationToken);
 
         return ToResponse(subscription);
@@ -49,9 +54,11 @@ public sealed class SubscriptionGrpcService(ISubscriptionService subscriptionSer
         Internal.Contracts.GetActivePersonalSubscriptionRequest request,
         ServerCallContext context)
     {
-        var subscription = await subscriptionService.GetActivePersonalSubscriptionAsync(
-            GrpcParsing.ToDomainServiceId(request.ServiceId),
-            GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
+        var subscription = await dbContext.Database.InTransactionAsync(
+            () => subscriptionService.GetActivePersonalSubscriptionAsync(
+                GrpcParsing.ToDomainServiceId(request.ServiceId),
+                GrpcParsing.ParseGuid(request.UserId, nameof(request.UserId)),
+                context.CancellationToken),
             context.CancellationToken);
 
         return new Internal.Contracts.TariffNameResponse { Name = subscription.Code };
@@ -61,9 +68,11 @@ public sealed class SubscriptionGrpcService(ISubscriptionService subscriptionSer
         Internal.Contracts.GetActiveOrganizationSubscriptionRequest request,
         ServerCallContext context)
     {
-        var subscription = await subscriptionService.GetActiveOrganizationSubscriptionAsync(
-            GrpcParsing.ToDomainServiceId(request.ServiceId),
-            GrpcParsing.ParseGuid(request.OrganizationId, nameof(request.OrganizationId)),
+        var subscription = await dbContext.Database.InTransactionAsync(
+            () => subscriptionService.GetActiveOrganizationSubscriptionAsync(
+                GrpcParsing.ToDomainServiceId(request.ServiceId),
+                GrpcParsing.ParseGuid(request.OrganizationId, nameof(request.OrganizationId)),
+                context.CancellationToken),
             context.CancellationToken);
 
         return new Internal.Contracts.TariffNameResponse { Name = subscription.Code };
