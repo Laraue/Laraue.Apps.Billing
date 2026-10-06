@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Laraue.Apps.Billing.DataAccess.Entities;
 using Laraue.Apps.Billing.Services;
+using Laraue.Apps.Billing.Services.Payments;
 
 namespace Laraue.Apps.Billing.WebApiServices;
 
@@ -14,13 +15,16 @@ public interface ITariffService
         CancellationToken cancellationToken);
 }
 
-public class TariffService(ICoreTariffService coreTariffService) : ITariffService
+public class TariffService(
+    ICoreTariffService coreTariffService,
+    IPaymentProviderRegistry paymentProviderRegistry) : ITariffService
 {
     public async Task<GetServiceTariffsResponse> GetServiceTariffs(
         GetServiceTariffsRequest request,
         CancellationToken cancellationToken)
     {
-        var currencyRate = await coreTariffService.GetCurrencyRateAsync(request.CurrencyCode, cancellationToken);
+        var currencyCode = paymentProviderRegistry.ResolveCurrency(request.CurrencyCode);
+        var currencyRate = await coreTariffService.GetCurrencyRateAsync(currencyCode, cancellationToken);
 
         var personalTariffs = await coreTariffService.GetPersonalTariffsAsync(request.ServiceId, currencyRate, cancellationToken);
         var teamTariffs = await coreTariffService.GetTeamTariffsAsync(request.ServiceId, currencyRate, cancellationToken);
@@ -83,7 +87,12 @@ public class TariffService(ICoreTariffService coreTariffService) : ITariffServic
 public record GetServiceTariffsRequest
 {
     public ServiceId ServiceId { get; set; }
-    public required string CurrencyCode { get; set; }
+
+    /// <summary>
+    /// The currency to price the tariffs in. Only currencies the payment provider can charge are
+    /// available; omitted, the tariffs come in the provider's own currency.
+    /// </summary>
+    public string? CurrencyCode { get; set; }
 }
 
 public record GetServiceTariffsResponse

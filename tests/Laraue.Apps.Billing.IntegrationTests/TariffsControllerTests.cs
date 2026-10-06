@@ -10,16 +10,18 @@ namespace Laraue.Apps.Billing.IntegrationTests;
 public class TariffsControllerTests(WebApiTestHost host) : IClassFixture<WebApiTestHost>
 {
     [Theory]
-    [InlineData("USD")]
     [InlineData("RUB")]
-    public async Task GetServiceTariffs_ShouldReturnLaraueBoardsTariffs_WhenCurrencyIsSupported(string currencyCode)
+    [InlineData("rub")]
+    [InlineData(null)]
+    public async Task GetServiceTariffs_ShouldReturnLaraueBoardsTariffs_InThePaymentCurrency(string? requestedCurrencyCode)
     {
+        const string currencyCode = "RUB";
         var response = await host.Controller<TariffsController>()
             .Execute(c => c.GetServiceTariffs(
                 new GetServiceTariffsRequest
                 {
                     ServiceId = ServiceId.LaraueBoards,
-                    CurrencyCode = currencyCode,
+                    CurrencyCode = requestedCurrencyCode,
                 },
                 CancellationToken.None));
 
@@ -28,17 +30,15 @@ public class TariffsControllerTests(WebApiTestHost host) : IClassFixture<WebApiT
         Assert.All(response.TeamSubscriptions, x => Assert.Equal(currencyCode, x.CurrencyCode));
     }
 
-    [Theory]
-    [InlineData("USD")]
-    [InlineData("RUB")]
-    public async Task GetServiceTariffs_ShouldReturnMarkdownTranslatorTariffs_WhenCurrencyIsSupported(string currencyCode)
+    [Fact]
+    public async Task GetServiceTariffs_ShouldReturnMarkdownTranslatorTariffs_InThePaymentCurrency()
     {
+        const string currencyCode = "RUB";
         var response = await host.Controller<TariffsController>()
             .Execute(c => c.GetServiceTariffs(
                 new GetServiceTariffsRequest
                 {
                     ServiceId = ServiceId.MarkdownTranslator,
-                    CurrencyCode = currencyCode,
                 },
                 CancellationToken.None));
 
@@ -55,22 +55,23 @@ public class TariffsControllerTests(WebApiTestHost host) : IClassFixture<WebApiT
                 new GetServiceTariffsRequest
                 {
                     ServiceId = (ServiceId)(-1),
-                    CurrencyCode = "USD",
                 },
                 CancellationToken.None)));
 
         Assert.IsType<BadRequestException>(exception.InnerException);
     }
 
-    [Fact]
-    public async Task GetServiceTariffs_ShouldThrowBadRequestException_WhenCurrencyDoesNotExist()
+    [Theory]
+    [InlineData("USD")]
+    [InlineData("XXX")]
+    public async Task GetServiceTariffs_ShouldThrowBadRequestException_WhenProviderCannotChargeTheCurrency(string currencyCode)
     {
         var exception = await Assert.ThrowsAsync<HttpRequestException>(() => host.Controller<TariffsController>()
             .Execute(c => c.GetServiceTariffs(
                 new GetServiceTariffsRequest
                 {
                     ServiceId = ServiceId.LaraueBoards,
-                    CurrencyCode = "XXX",
+                    CurrencyCode = currencyCode,
                 },
                 CancellationToken.None)));
 
