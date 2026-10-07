@@ -397,6 +397,57 @@ public class SubscriptionServiceTests : BillingIntegrationTest
             t => t.PaidEntityId == userId && t.Reason == TokenTransactionReason.TariffGrant));
     }
 
+    [Fact]
+    public async Task GetOrCreateActivePersonalSubscriptionIdAsync_ShouldRenewTheFreePeriodOnce_WhenManyFirstCallsAfterTheMonthRunConcurrently()
+    {
+        var userId = Guid.NewGuid();
+
+        var subscriptionId = await InTransaction(() => _subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(
+            ServiceId.LaraueBoards, userId, CancellationToken.None));
+
+        var balance = await Context.BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        balance.FreeTokensCount = 100;
+        await Context.SaveChangesAsync();
+
+        // The month is over and several requests come at once: all of them see an over period, but the
+        // lock lets one in at a time, and each after the first finds it renewed, so the allowance is granted once.
+        var renewalTime = new DateTime(2026, 3, 5, 12, 0, 0, DateTimeKind.Utc);
+        _dateTimeProvider.UtcNow = renewalTime;
+
+        // Many callers at once, each on its own connection: with only two the race is easy to miss.
+        var scopes = Enumerable.Range(0, 8).Select(_ => _host.Services.CreateScope()).ToList();
+        try
+        {
+            await Task.WhenAll(scopes.Select(scope =>
+            {
+                var scopeContext = scope.ServiceProvider.GetRequiredService<DatabaseContext>();
+                var scopeService = new SubscriptionService(scopeContext, new FakeDateTimeProvider(renewalTime));
+
+                return scopeContext.Database.InTransactionAsync(() => scopeService.GetOrCreateActivePersonalSubscriptionIdAsync(
+                    ServiceId.LaraueBoards, userId, CancellationToken.None));
+            }));
+        }
+        finally
+        {
+            scopes.ForEach(scope => scope.Dispose());
+        }
+
+        var deltas = await Context.TokenTransactions
+            .Where(t => t.PaidEntityId == userId && t.Reason == TokenTransactionReason.TariffGrant)
+            .OrderBy(t => t.CreatedAt)
+            .Select(t => t.Delta)
+            .ToListAsync();
+        // The first grant and one renewal (25,000 - 100 left), not two.
+        Assert.Equal([25_000L, 24_900L], deltas);
+
+        var subscription = await FreshContext().Subscriptions.SingleAsync(s => s.Id == subscriptionId);
+        Assert.Equal(renewalTime, subscription.CurrentPeriodStartedAt);
+        var balanceAfter = await FreshContext().BalanceSubscriptionTokens.SingleAsync(b => b.SubscriptionId == subscriptionId);
+        Assert.Equal(25_000, balanceAfter.FreeTokensCount);
+    }
+
+    private DatabaseContext FreshContext() => _host.Services.CreateScope().ServiceProvider.GetRequiredService<DatabaseContext>();
+
     private sealed class FakeDateTimeProvider(DateTime utcNow) : IDateTimeProvider
     {
         public DateTime UtcNow { get; set; } = utcNow;
