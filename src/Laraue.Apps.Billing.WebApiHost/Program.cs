@@ -11,6 +11,7 @@ public sealed class Program
     public static async Task Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+        builder.Logging.ClearProviders().AddJsonConsole();
 
         const string dbConnectionStringName = "Postgre";
 
