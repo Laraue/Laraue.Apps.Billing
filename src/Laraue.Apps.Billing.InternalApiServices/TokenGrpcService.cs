@@ -132,6 +132,7 @@ public sealed class TokenGrpcService(DatabaseContext dbContext, ITokenService to
             FreeTokensCount = balance.FreeTokensCount,
             SubscriptionTokensCount = balance.SubscriptionTokensCount,
             PurchasedTokensCount = balance.PurchasedTokensCount,
+            PurchasedTokensExpiringCount = balance.PurchasedTokensExpiringCount,
         };
         if (balance.PurchasedTokensExpireAt is { } expireAt)
         {

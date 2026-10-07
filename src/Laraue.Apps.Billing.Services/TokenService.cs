@@ -132,6 +132,12 @@ public sealed record TokenBalance
     /// Null when there are none.
     /// </summary>
     public DateTime? PurchasedTokensExpireAt { get; init; }
+
+    /// <summary>
+    /// How many purchased tokens expire at <see cref="PurchasedTokensExpireAt"/>: the tokens left in the
+    /// packs that expire at that moment, not all the purchased ones. Zero when there are none.
+    /// </summary>
+    public long PurchasedTokensExpiringCount { get; init; }
 }
 
 /// <summary>
@@ -347,6 +353,7 @@ public class TokenService(
             .SingleAsync(b => b.SubscriptionId == subscriptionId, cancellationToken);
 
         var purchasedPacks = await GetUnexpiredPurchasedTokenPacksAsync(paidEntityId, now, cancellationToken);
+        var firstExpiry = purchasedPacks.FirstOrDefault(p => p.Available > 0)?.ExpiredAt;
 
         return new TokenBalance
         {
@@ -354,7 +361,10 @@ public class TokenService(
             SubscriptionTokensCount = subscriptionBalance.SubscriptionTokensCount,
             PurchasedTokensCount = purchasedPacks.Sum(p => p.Available),
             // The packs come soonest-expiring first.
-            PurchasedTokensExpireAt = purchasedPacks.FirstOrDefault(p => p.Available > 0)?.ExpiredAt,
+            PurchasedTokensExpireAt = firstExpiry,
+            PurchasedTokensExpiringCount = firstExpiry is { } expiry
+                ? purchasedPacks.Where(p => p.ExpiredAt == expiry).Sum(p => p.Available)
+                : 0,
         };
     }
 

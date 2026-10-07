@@ -88,6 +88,9 @@ message TokenBalanceResponse {
   // When the purchased tokens that expire first run out, among the packs that still have tokens.
   // Not set when there are none.
   google.protobuf.Timestamp purchased_tokens_expire_at = 4;
+  // How many purchased tokens expire at purchased_tokens_expire_at: the tokens left in the packs that
+  // expire then, not all the purchased ones. Zero when there are none.
+  int64 purchased_tokens_expiring_count = 5;
 }
 
 message GetTokenTransactionsRequest {

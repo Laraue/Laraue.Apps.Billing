@@ -77,7 +77,8 @@ apps (`Laraue.Apps.Boards`) can reference it - see "NuGet publishing" below.
   the rolling month of a Free plan, the calendar month of a paid one), `PeriodEndsAt` and `PeriodResets`
   (true for a Free plan, whose allowance starts over then; false for a paid plan, which ends at the end
   of the paid period). `TokenBalance.PurchasedTokensExpireAt` is the earliest expiry among the purchased
-  packs that still have tokens.
+  packs that still have tokens, and `PurchasedTokensExpiringCount` how many tokens expire then (the packs
+  expiring at that moment, not all the purchased ones).
 - `Payment` - a customer's attempt to pay for a tariff or a token pack (`Kind`), in minor units of
   `CurrencyCode`, with a `Status` (Pending/Paid/Failed/Canceled). Provider-agnostic on purpose: the
   provider is a string code (`Provider`), and its own references live only in `ProviderPaymentId`

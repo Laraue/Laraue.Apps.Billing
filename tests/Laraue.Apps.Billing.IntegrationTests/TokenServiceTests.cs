@@ -319,6 +319,39 @@ public class TokenServiceTests : BillingIntegrationTest
     }
 
     [Fact]
+    public async Task GetPersonalTokenBalanceAsync_ShouldCountOnlyTheTokensThatExpireFirst_WhenPacksExpireAtDifferentTimes()
+    {
+        var paidEntityId = Guid.NewGuid();
+        await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 0, subscriptionTokens: 0);
+        await SeedPurchasedPackAsync(paidEntityId, MediumPackId, DateTime.UtcNow.AddDays(60));
+        await SeedPurchasedPackAsync(paidEntityId, SmallPackId, DateTime.UtcNow.AddDays(30));
+        await SetPurchasedBalanceAsync(paidEntityId, 700_000);
+
+        var balance = await InTransaction(() => _tokenService.GetPersonalTokenBalanceAsync(
+            ServiceId.LaraueBoards, paidEntityId, CancellationToken.None));
+
+        // 100,000 of the Small pack go first, the 600,000 of the Medium pack later.
+        Assert.Equal(700_000, balance.PurchasedTokensCount);
+        Assert.Equal(100_000, balance.PurchasedTokensExpiringCount);
+    }
+
+    [Fact]
+    public async Task GetPersonalTokenBalanceAsync_ShouldAddUpThePacksThatExpireAtTheSameTime_Always()
+    {
+        var paidEntityId = Guid.NewGuid();
+        await SeedActiveSubscriptionAsync(paidEntityId, freeTokens: 0, subscriptionTokens: 0);
+        var expiredAt = DateTime.UtcNow.AddDays(30);
+        await SeedPurchasedPackAsync(paidEntityId, SmallPackId, expiredAt);
+        await SeedPurchasedPackAsync(paidEntityId, SmallPackId, expiredAt);
+        await SeedPurchasedPackAsync(paidEntityId, MediumPackId, DateTime.UtcNow.AddDays(90));
+
+        var balance = await InTransaction(() => _tokenService.GetPersonalTokenBalanceAsync(
+            ServiceId.LaraueBoards, paidEntityId, CancellationToken.None));
+
+        Assert.Equal(200_000, balance.PurchasedTokensExpiringCount);
+    }
+
+    [Fact]
     public async Task GetPersonalTokenBalanceAsync_ShouldNotReturnAnExpiry_WhenThereAreNoPurchasedTokens()
     {
         var paidEntityId = Guid.NewGuid();
@@ -327,6 +360,7 @@ public class TokenServiceTests : BillingIntegrationTest
             ServiceId.LaraueBoards, paidEntityId, CancellationToken.None));
 
         Assert.Null(balance.PurchasedTokensExpireAt);
+        Assert.Equal(0, balance.PurchasedTokensExpiringCount);
     }
 
     [Fact]
