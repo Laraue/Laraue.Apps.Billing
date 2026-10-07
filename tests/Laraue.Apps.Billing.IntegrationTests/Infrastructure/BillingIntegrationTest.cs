@@ -1,5 +1,6 @@
 using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.Services;
+using Laraue.Apps.Billing.Services.Metrics;
 using Laraue.Apps.Billing.WebApiHost;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,10 +13,14 @@ public abstract class BillingIntegrationTest : IClassFixture<WebApiTestHost>, ID
 
     protected DatabaseContext Context { get; }
 
+    /// <summary>The host's metrics, so what a test records shows on that host's <c>/_metrics</c>.</summary>
+    protected BillingMetrics Metrics { get; }
+
     protected BillingIntegrationTest(WebApiTestHost host)
     {
         _scope = host.Services.CreateScope();
         Context = _scope.ServiceProvider.GetRequiredService<DatabaseContext>();
+        Metrics = host.Services.GetRequiredService<BillingMetrics>();
         Context.CleanDatabase();
     }
 

@@ -230,6 +230,9 @@ Solution: `Laraue.Apps.Billing.sln`
   DTOs) plus its own DI composition (`ServiceCollectionExtensions.AddInternalApiServices()` registers
   `ISubscriptionService`/`SubscriptionService`). Kept out of `InternalApiHost` on purpose - see the
   next bullet.
+- `src/Laraue.Apps.Billing.WorkerServices` - `WorkerHost`'s own DI composition (`AddWorkerServices()`) and what only
+  the worker runs: today the database-backed gauges, `BillingStateMetrics`. Same `Host -> Host{Services} -> Services`
+  layering as the other hosts, so worker-only code stays out of the core `Services` project.
 - `src/Laraue.Apps.Billing.InternalApiHost` - the internal gRPC host: `Program.cs` only
   (Kestrel/DI/OpenTelemetry wiring, migrations on startup). No gRPC service implementations of its
   own - those belong in `InternalApiServices` instead. This is an intentional asymmetry with
@@ -258,6 +261,28 @@ which owns that host's reads and projects them into its own DTOs. When adding a 
 directly, and rather than adding a host-specific read or DTO to a core service in `Services`.
 - `tests/Laraue.Apps.Billing.IntegrationTests` - the only test project, structured the same way as
   `Laraue.Apps.Boards`'s integration tests (see "Testing" below).
+
+## Metrics
+
+Prometheus metrics on every host's `/_metrics` (`System.Diagnostics.Metrics`, meter `Laraue.Apps.Billing`,
+`BillingMetrics`/`BillingStateMetrics` in `Services/Metrics`); each host adds the meter with `AddMeter`. Scrape
+config, alert rules and the Grafana dashboard are not kept in this repo.
+
+- **Naming**: instrument names are dotted, `billing.<noun>.<verb or state>` (the exporter turns them into
+  `billing_<noun>_<verb>_total` for counters, `_seconds` for a unit of `s`). A new metric goes into `BillingMetrics`
+  with a typed `Record...` method, never a raw counter in a service.
+- **Counters are events** (`rate`/`increase` in Grafana), recorded by the host that handles the event:
+  `billing_tokens_spent_total{service}` (on commit, the actual amount), `billing_token_reservations_total{service,result}`,
+  `billing_payments_created_total{provider,kind,currency}`, `billing_payments_completed_total{provider,kind,status}`,
+  `billing_payments_amount_total{provider,currency}` (minor units, paid only), `billing_payment_notifications_total{provider,result}`
+  and `billing_payment_notification_duration_seconds`. Sum over hosts in a query.
+- **Gauges are state**, read from the database, so they survive a restart: `billing_subscriptions_active{service,tariff}`,
+  `billing_payments_pending`, `billing_payments_pending_oldest_age_seconds`. Published by `WorkerHost` only
+  (`BillingStateMetrics` in `WorkerServices`, registered by `AddWorkerServices`), refreshed every 30 s, so scaled web/gRPC replicas do not duplicate the series.
+- **Labels are low-cardinality**: service, tariff, provider, kind, currency, status, result. Never a payment, user or
+  organization id. `TokenTransaction.ServiceId` exists so a commit/cancel knows the service.
+- A metric is recorded when the code runs, before the host commits the transaction, so a rollback can overcount a little.
+- **Tests** scrape `/_metrics` (`BillingMetricsTests`) and assert a series exists, not its count: meters are process-wide.
 
 ## User-facing text
 

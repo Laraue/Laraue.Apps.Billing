@@ -1,5 +1,6 @@
 using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.DataAccess.Entities;
+using Laraue.Apps.Billing.Services.Metrics;
 using Laraue.Apps.Billing.Services.Resources;
 using Laraue.Core.DataAccess.Contracts;
 using Laraue.Core.DataAccess.EFCore.Extensions;
@@ -164,7 +165,8 @@ public sealed record TokenTransactionItem
 public class TokenService(
     DatabaseContext context,
     ISubscriptionService subscriptionService,
-    IDateTimeProvider dateTimeProvider) : ITokenService
+    IDateTimeProvider dateTimeProvider,
+    BillingMetrics metrics) : ITokenService
 {
     public Task<ReservationResult> TryReservePersonalTokensAsync(
         ServiceId serviceId,
@@ -173,6 +175,7 @@ public class TokenService(
         int maxOutputTokensCount,
         CancellationToken cancellationToken)
         => TryReserveTokensCoreAsync(
+            serviceId,
             userId,
             userId,
             ct => subscriptionService.GetOrCreateActivePersonalSubscriptionIdAsync(serviceId, userId, ct),
@@ -188,6 +191,7 @@ public class TokenService(
         int maxOutputTokensCount,
         CancellationToken cancellationToken)
         => TryReserveTokensCoreAsync(
+            serviceId,
             organizationId,
             userId,
             ct => subscriptionService.GetOrCreateActiveOrganizationSubscriptionIdAsync(serviceId, organizationId, ct),
@@ -207,6 +211,7 @@ public class TokenService(
     /// an organization one) - recorded on the transaction separately from who's billed.
     /// </summary>
     private async Task<ReservationResult> TryReserveTokensCoreAsync(
+        ServiceId serviceId,
         Guid paidEntityId,
         Guid ownerId,
         Func<CancellationToken, Task<Guid>> resolveSubscriptionIdAsync,
@@ -237,6 +242,8 @@ public class TokenService(
 
         if (subscriptionAvailable + purchasedAvailable < requested)
         {
+            metrics.RecordReservation(serviceId, BillingMetrics.ReservationInsufficientBalance);
+
             return new ReservationResult { Error = Errors.InsufficientTokenBalance };
         }
 
@@ -300,6 +307,7 @@ public class TokenService(
             Id = Guid.NewGuid(),
             PaidEntityId = paidEntityId,
             OwnerId = ownerId,
+            ServiceId = serviceId,
             Status = TokenSpentStatus.Started,
             Reason = TokenTransactionReason.Spend,
             CreatedAt = now,
@@ -312,6 +320,8 @@ public class TokenService(
         context.TokenTransactions.Add(tokenTransaction);
 
         await context.SaveChangesAsync(cancellationToken);
+
+        metrics.RecordReservation(serviceId, BillingMetrics.ReservationStarted);
 
         return new ReservationResult { TokenTransactionId = tokenTransaction.Id };
     }
@@ -452,6 +462,9 @@ public class TokenService(
         tokenTransaction.Delta = -actualSpent;
 
         await context.SaveChangesAsync(cancellationToken);
+
+        metrics.RecordTokensSpent(tokenTransaction.ServiceId, actualSpent);
+        metrics.RecordReservation(tokenTransaction.ServiceId, BillingMetrics.ReservationConfirmed);
     }
 
     public async Task CancelTokensReservationAsync(
@@ -471,6 +484,8 @@ public class TokenService(
         tokenTransaction.Error = error;
 
         await context.SaveChangesAsync(cancellationToken);
+
+        metrics.RecordReservation(tokenTransaction.ServiceId, BillingMetrics.ReservationCancelled);
     }
 
     /// <summary>

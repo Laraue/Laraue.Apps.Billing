@@ -1,8 +1,10 @@
 using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.DataAccess.Entities;
+using Laraue.Apps.Billing.Services.Metrics;
 using Laraue.Apps.Billing.Services.Resources;
 using Laraue.Core.DateTime.Services.Abstractions;
 using Laraue.Core.Exceptions.Web;
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -89,6 +91,7 @@ public class CorePaymentService(
     IPaymentProviderRegistry providerRegistry,
     IPaymentFulfillment fulfillment,
     IDateTimeProvider dateTimeProvider,
+    BillingMetrics metrics,
     ILogger<CorePaymentService> logger) : ICorePaymentService
 {
     public async Task<PaymentCheckout> CreateAsync(CreatePaymentRequest request, CancellationToken cancellationToken)
@@ -210,6 +213,8 @@ public class CorePaymentService(
 
         await context.SaveChangesAsync(cancellationToken);
 
+        metrics.RecordPaymentCreated(provider.Code, request.Kind, currencyCode);
+
         logger.LogInformation(
             "Payment {PaymentId} saved with status {Status}",
             paymentId,
@@ -257,6 +262,35 @@ public class CorePaymentService(
     {
         context.Database.EnsureTransactionStarted();
 
+        var startedAt = Stopwatch.GetTimestamp();
+        var trace = new NotificationTrace();
+
+        try
+        {
+            return await HandleNotificationCoreAsync(providerCode, request, trace, cancellationToken);
+        }
+        finally
+        {
+            metrics.RecordNotification(providerCode, trace.Result, Stopwatch.GetElapsedTime(startedAt));
+        }
+    }
+
+    /// <summary>
+    /// Carries the metrics result of one notification out of the handler: it stays
+    /// <see cref="BillingMetrics.NotificationError"/> unless a step reports a more specific one.
+    /// </summary>
+    private sealed class NotificationTrace
+    {
+        public string Result { get; set; } = BillingMetrics.NotificationError;
+    }
+
+    private async Task<PaymentNotificationResult> HandleNotificationCoreAsync(
+        string providerCode,
+        PaymentNotificationRequest request,
+        NotificationTrace trace,
+        CancellationToken cancellationToken)
+    {
+
         var provider = providerRegistry.Get(providerCode);
 
         // Names only: the values include the provider's signature.
@@ -274,6 +308,8 @@ public class CorePaymentService(
         }
         catch (Exception ex)
         {
+            trace.Result = BillingMetrics.NotificationInvalidSignature;
+
             logger.LogWarning(
                 ex,
                 "A {Provider} notification was rejected while being parsed or verified",
@@ -290,7 +326,7 @@ public class CorePaymentService(
             notification.AmountMinorUnits,
             notification.CurrencyCode);
 
-        var paymentId = await FindPaymentIdAsync(provider.Code, notification, cancellationToken);
+        var paymentId = await FindPaymentIdAsync(provider.Code, notification, trace, cancellationToken);
 
         // Two deliveries of the same notification must not fulfil the payment twice.
         await context.Database.PgAdvisoryXactLock(paymentId.ToString(), cancellationToken);
@@ -316,12 +352,14 @@ public class CorePaymentService(
                 "Payment {PaymentId} is already paid, nothing to do, sending the acknowledgement again",
                 payment.Id);
 
+            trace.Result = BillingMetrics.NotificationDuplicate;
+
             return acknowledgement;
         }
 
         if (notification.Outcome == PaymentNotificationOutcome.Paid)
         {
-            EnsureNotificationMatchesPayment(payment, notification);
+            EnsureNotificationMatchesPayment(payment, notification, trace);
 
             logger.LogInformation("Fulfilling payment {PaymentId}", payment.Id);
 
@@ -330,6 +368,9 @@ public class CorePaymentService(
             payment.Status = PaymentStatus.Paid;
             payment.PaidAt = dateTimeProvider.UtcNow;
 
+            metrics.RecordPaymentCompleted(payment.Provider, payment.Kind, PaymentStatus.Paid);
+            metrics.RecordPaymentAmount(payment.Provider, payment.CurrencyCode, payment.AmountMinorUnits);
+
             logger.LogInformation("Payment {PaymentId} fulfilled and marked as paid", payment.Id);
         }
         else if (payment.Status == PaymentStatus.Pending)
@@ -337,6 +378,8 @@ public class CorePaymentService(
             payment.Status = notification.Outcome == PaymentNotificationOutcome.Failed
                 ? PaymentStatus.Failed
                 : PaymentStatus.Canceled;
+
+            metrics.RecordPaymentCompleted(payment.Provider, payment.Kind, payment.Status);
 
             logger.LogInformation(
                 "Payment {PaymentId} marked as {Status} by the provider",
@@ -356,6 +399,11 @@ public class CorePaymentService(
         payment.ProviderData = notification.ProviderData ?? payment.ProviderData;
 
         await context.SaveChangesAsync(cancellationToken);
+
+        if (trace.Result == BillingMetrics.NotificationError)
+        {
+            trace.Result = BillingMetrics.NotificationAccepted;
+        }
 
         logger.LogInformation(
             "Notification of payment {PaymentId} handled, status {Status}",
@@ -378,6 +426,7 @@ public class CorePaymentService(
     private async Task<Guid> FindPaymentIdAsync(
         string providerCode,
         PaymentNotification notification,
+        NotificationTrace trace,
         CancellationToken cancellationToken)
     {
         var query = context.Payments.Where(x => x.Provider == providerCode);
@@ -392,6 +441,7 @@ public class CorePaymentService(
         }
         else
         {
+            trace.Result = BillingMetrics.NotificationNotFound;
             logger.LogWarning("A {Provider} notification references no payment", providerCode);
 
             throw new BadRequestException(
@@ -405,6 +455,8 @@ public class CorePaymentService(
 
         if (paymentId is null)
         {
+            trace.Result = BillingMetrics.NotificationNotFound;
+
             logger.LogWarning(
                 "No {Provider} payment found for payment id {PaymentId} / provider payment id {ProviderPaymentId}",
                 providerCode,
@@ -418,7 +470,7 @@ public class CorePaymentService(
         return paymentId.Value;
     }
 
-    private void EnsureNotificationMatchesPayment(Payment payment, PaymentNotification notification)
+    private void EnsureNotificationMatchesPayment(Payment payment, PaymentNotification notification, NotificationTrace trace)
     {
         var amountMatches = notification.AmountMinorUnits is null
             || notification.AmountMinorUnits == payment.AmountMinorUnits;
@@ -428,6 +480,8 @@ public class CorePaymentService(
 
         if (!amountMatches || !currencyMatches)
         {
+            trace.Result = BillingMetrics.NotificationAmountMismatch;
+
             logger.LogWarning(
                 "Notification does not match payment {PaymentId}: expected {ExpectedAmountMinorUnits} {ExpectedCurrencyCode}, got {AmountMinorUnits} {CurrencyCode}",
                 payment.Id,

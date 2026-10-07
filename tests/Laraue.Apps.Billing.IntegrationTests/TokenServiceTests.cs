@@ -25,7 +25,7 @@ public class TokenServiceTests : BillingIntegrationTest
     {
         _host = host;
         var dateTimeProvider = new DateTimeProvider();
-        _tokenService = new TokenService(Context, new SubscriptionService(Context, dateTimeProvider), dateTimeProvider);
+        _tokenService = new TokenService(Context, new SubscriptionService(Context, dateTimeProvider), dateTimeProvider, Metrics);
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public class TokenServiceTests : BillingIntegrationTest
         var otherContext = otherScope.ServiceProvider.GetRequiredService<DatabaseContext>();
         var otherDateTimeProvider = new DateTimeProvider();
         var otherTokenService = new TokenService(
-            otherContext, new SubscriptionService(otherContext, otherDateTimeProvider), otherDateTimeProvider);
+            otherContext, new SubscriptionService(otherContext, otherDateTimeProvider), otherDateTimeProvider, Metrics);
 
         var results = await Task.WhenAll(
             InTransaction(() => _tokenService.TryReservePersonalTokensAsync(
@@ -473,6 +473,7 @@ public class TokenServiceTests : BillingIntegrationTest
             Id = id,
             PaidEntityId = paidEntityId,
             OwnerId = ownerId ?? paidEntityId,
+            ServiceId = ServiceId.LaraueBoards,
             Status = TokenSpentStatus.Confirmed,
             Reason = TokenTransactionReason.Spend,
             CreatedAt = createdAt,

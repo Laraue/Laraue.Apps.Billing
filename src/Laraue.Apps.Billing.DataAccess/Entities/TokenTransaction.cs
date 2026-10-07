@@ -9,6 +9,12 @@ public class TokenTransaction
     public Guid PaidEntityId { get; set; }
     public Guid OwnerId { get; set; }
 
+    /// <summary>
+    /// The service the row belongs to: where the tokens were spent, or the service whose tariff or payment
+    /// granted them. The metrics label of a spend.
+    /// </summary>
+    public ServiceId ServiceId { get; set; }
+
     public TokenSpentStatus Status { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? FinishedAt { get; set; }

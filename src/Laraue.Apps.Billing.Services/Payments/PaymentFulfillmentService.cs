@@ -217,6 +217,7 @@ public class PaymentFulfillmentService(
             Id = Guid.NewGuid(),
             PaidEntityId = payment.PaidEntityId,
             OwnerId = payment.OwnerId,
+            ServiceId = payment.ServiceId,
             Status = TokenSpentStatus.Confirmed,
             Reason = reason,
             CreatedAt = now,

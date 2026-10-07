@@ -1,3 +1,4 @@
+using Laraue.Apps.Billing.Services.Metrics;
 using Laraue.Core.DateTime.Services.Abstractions;
 using Laraue.Core.DateTime.Services.Impl;
 using Microsoft.Extensions.Configuration;
@@ -17,6 +18,7 @@ public static class ServiceCollectionExtensions
         public IServiceCollection AddPaymentServices(IConfiguration configuration)
         {
             services.TryAddSingleton<IDateTimeProvider, DateTimeProvider>();
+            services.AddBillingMetrics();
 
             services
                 .AddOptions<PaymentsOptions>()

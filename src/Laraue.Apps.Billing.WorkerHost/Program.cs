@@ -1,6 +1,8 @@
 using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.InternalApiServices;
 using Laraue.Apps.Billing.Services.Jobs;
+using Laraue.Apps.Billing.Services.Metrics;
+using Laraue.Apps.Billing.WorkerServices;
 using Laraue.Core.Extensions.Hosting;
 using Laraue.Core.Extensions.Hosting.EfCore;
 using Microsoft.EntityFrameworkCore;
@@ -38,6 +40,9 @@ public sealed class Program
         // ITokenService, IDateTimeProvider), nothing gRPC/API-specific despite the project name.
         builder.Services.AddInternalApiServices(builder.Configuration);
 
+        // The database-backed gauges (active subscriptions, pending payments) are published by this host only.
+        builder.Services.AddWorkerServices();
+
         builder.Services.AddBackgroundJob<CancelStaleTokenReservationsJob, EmptyJobData>(
             "CancelStaleTokenReservationsJob");
 
@@ -51,6 +56,7 @@ public sealed class Program
         builder.Services.AddOpenTelemetry()
             .WithMetrics(metrics => metrics
                 .AddMeter(LaraueJobsTelemetry.SourceName)
+                .AddMeter(BillingMetrics.MeterName)
                 .AddAspNetCoreInstrumentation()
                 .AddRuntimeInstrumentation()
                 .AddPrometheusExporter());

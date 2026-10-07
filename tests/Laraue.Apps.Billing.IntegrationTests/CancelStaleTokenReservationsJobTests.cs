@@ -26,7 +26,7 @@ public class CancelStaleTokenReservationsJobTests : BillingIntegrationTest
     {
         _host = host;
         _dateTimeProvider = new FakeDateTimeProvider(DateTime.UtcNow);
-        _tokenService = new TokenService(Context, new SubscriptionService(Context, _dateTimeProvider), _dateTimeProvider);
+        _tokenService = new TokenService(Context, new SubscriptionService(Context, _dateTimeProvider), _dateTimeProvider, Metrics);
     }
 
     [Fact]
