@@ -259,6 +259,29 @@ directly, and rather than adding a host-specific read or DTO to a core service i
 - `tests/Laraue.Apps.Billing.IntegrationTests` - the only test project, structured the same way as
   `Laraue.Apps.Boards`'s integration tests (see "Testing" below).
 
+## Metrics
+
+Prometheus metrics on every host's `/_metrics` (`System.Diagnostics.Metrics`, meter `Laraue.Apps.Billing`,
+`BillingMetrics`/`BillingStateMetrics` in `Services/Metrics`); each host adds the meter with `AddMeter`. Set up
+for the Grafana dashboards of BRD-275: `ops/prometheus/scrape.yml`, `ops/prometheus/billing-alerts.yml`,
+`ops/grafana/billing-dashboard.json`.
+
+- **Naming**: instrument names are dotted, `billing.<noun>.<verb or state>` (the exporter turns them into
+  `billing_<noun>_<verb>_total` for counters, `_seconds` for a unit of `s`). A new metric goes into `BillingMetrics`
+  with a typed `Record...` method, never a raw counter in a service.
+- **Counters are events** (`rate`/`increase` in Grafana), recorded by the host that handles the event:
+  `billing_tokens_spent_total{service}` (on commit, the actual amount), `billing_token_reservations_total{service,result}`,
+  `billing_payments_created_total{provider,kind,currency}`, `billing_payments_completed_total{provider,kind,status}`,
+  `billing_payments_amount_total{provider,currency}` (minor units, paid only), `billing_payment_notifications_total{provider,result}`
+  and `billing_payment_notification_duration_seconds`. Sum over hosts in a query.
+- **Gauges are state**, read from the database, so they survive a restart: `billing_subscriptions_active{service,tariff}`,
+  `billing_payments_pending`, `billing_payments_pending_oldest_age_seconds`. Published by `WorkerHost` only
+  (`AddBillingStateMetrics`), refreshed every 30 s, so scaled web/gRPC replicas do not duplicate the series.
+- **Labels are low-cardinality**: service, tariff, provider, kind, currency, status, result. Never a payment, user or
+  organization id. `TokenTransaction.ServiceId` exists so a commit/cancel knows the service (null on old rows, label `unknown`).
+- A metric is recorded when the code runs, before the host commits the transaction, so a rollback can overcount a little.
+- **Tests** scrape `/_metrics` (`BillingMetricsTests`) and assert a series exists, not its count: meters are process-wide.
+
 ## User-facing text
 
 Don't put string literals directly in `throw new SomeException("...")` calls. Use

@@ -1,0 +1,24 @@
+groups:
+  - name: billing
+    rules:
+      - alert: BillingPaymentPendingTooLong
+        expr: billing_payments_pending_oldest_age_seconds > 30 * 60
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: A payment has been Pending for more than 30 minutes
+          description: The provider's notification may not have arrived, check ResultURL and the notification logs.
+
+      - alert: BillingRejectedNotificationsSpike
+        expr: sum(increase(billing_payment_notifications_total{result=~"invalid_signature|amount_mismatch|not_found"}[10m])) > 5
+        labels: { severity: warning }
+        annotations:
+          summary: Payment notifications are being rejected
+          description: More than 5 notifications rejected in 10 minutes (invalid signature, amount mismatch or unknown payment).
+
+      - alert: BillingNotificationHandlerErrors
+        expr: sum(increase(billing_payment_notifications_total{result="error"}[10m])) > 0
+        labels: { severity: critical }
+        annotations:
+          summary: The payment notification handler fails
+          description: A notification ended with an unexpected error, a paid payment may not be fulfilled.

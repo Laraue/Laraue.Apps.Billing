@@ -1,4 +1,5 @@
 using Laraue.Apps.Billing.DataAccess;
+using Laraue.Apps.Billing.Services.Metrics;
 using Laraue.Core.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Metrics;
@@ -26,6 +27,7 @@ public sealed class Program
         builder.Services
             .AddOpenTelemetry()
             .WithMetrics(metrics => metrics
+                .AddMeter(BillingMetrics.MeterName)
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation()

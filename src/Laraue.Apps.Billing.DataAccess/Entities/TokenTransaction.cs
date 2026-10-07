@@ -9,6 +9,12 @@ public class TokenTransaction
     public Guid PaidEntityId { get; set; }
     public Guid OwnerId { get; set; }
 
+    /// <summary>
+    /// The service the tokens were spent in. Set on a spend reservation (the metrics label), null for
+    /// grants, purchases and expiries, and for spends made before the column existed.
+    /// </summary>
+    public ServiceId? ServiceId { get; set; }
+
     public TokenSpentStatus Status { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? FinishedAt { get; set; }
