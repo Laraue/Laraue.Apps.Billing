@@ -277,7 +277,7 @@ config, alert rules and the Grafana dashboard are not kept in this repo.
   `billing_payments_pending`, `billing_payments_pending_oldest_age_seconds`. Published by `WorkerHost` only
   (`AddBillingStateMetrics`), refreshed every 30 s, so scaled web/gRPC replicas do not duplicate the series.
 - **Labels are low-cardinality**: service, tariff, provider, kind, currency, status, result. Never a payment, user or
-  organization id. `TokenTransaction.ServiceId` exists so a commit/cancel knows the service (null on old rows, label `unknown`).
+  organization id. `TokenTransaction.ServiceId` exists so a commit/cancel knows the service.
 - A metric is recorded when the code runs, before the host commits the transaction, so a rollback can overcount a little.
 - **Tests** scrape `/_metrics` (`BillingMetricsTests`) and assert a series exists, not its count: meters are process-wide.
 

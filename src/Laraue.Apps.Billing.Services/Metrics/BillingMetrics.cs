@@ -14,9 +14,6 @@ public sealed class BillingMetrics
 {
     public const string MeterName = "Laraue.Apps.Billing";
 
-    /// <summary>The <c>service</c> label of a spend whose service is not known (rows from before the column).</summary>
-    public const string UnknownService = "unknown";
-
     public const string ReservationStarted = "started";
     public const string ReservationConfirmed = "confirmed";
     public const string ReservationCancelled = "cancelled";
@@ -72,11 +69,11 @@ public sealed class BillingMetrics
             description: "Time to handle a payment notification, by provider.");
     }
 
-    public void RecordReservation(ServiceId? serviceId, string result)
-        => _tokenReservations.Add(1, Tag("service", ServiceLabel(serviceId)), Tag("result", result));
+    public void RecordReservation(ServiceId serviceId, string result)
+        => _tokenReservations.Add(1, Tag("service", serviceId.ToString()), Tag("result", result));
 
-    public void RecordTokensSpent(ServiceId? serviceId, long tokens)
-        => _tokensSpent.Add(tokens, Tag("service", ServiceLabel(serviceId)));
+    public void RecordTokensSpent(ServiceId serviceId, long tokens)
+        => _tokensSpent.Add(tokens, Tag("service", serviceId.ToString()));
 
     public void RecordPaymentCreated(string provider, PaymentKind kind, string currency)
         => _paymentsCreated.Add(1, Tag("provider", provider), Tag("kind", kind.ToString()), Tag("currency", currency));
@@ -92,8 +89,6 @@ public sealed class BillingMetrics
         _paymentNotifications.Add(1, Tag("provider", provider), Tag("result", result));
         _paymentNotificationDuration.Record(duration.TotalSeconds, Tag("provider", provider));
     }
-
-    private static string ServiceLabel(ServiceId? serviceId) => serviceId?.ToString() ?? UnknownService;
 
     private static KeyValuePair<string, object?> Tag(string name, object? value) => new(name, value);
 }

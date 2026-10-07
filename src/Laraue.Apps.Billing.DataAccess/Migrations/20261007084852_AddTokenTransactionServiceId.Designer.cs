@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Laraue.Apps.Billing.DataAccess.Migrations
 {
     [DbContext(typeof(DatabaseContext))]
-    [Migration("20261007083730_AddTokenTransactionServiceId")]
+    [Migration("20261007084852_AddTokenTransactionServiceId")]
     partial class AddTokenTransactionServiceId
     {
         /// <inheritdoc />
@@ -695,7 +695,7 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("reserved_amount");
 
-                    b.Property<int?>("ServiceId")
+                    b.Property<int>("ServiceId")
                         .HasColumnType("integer")
                         .HasColumnName("service_id");
 

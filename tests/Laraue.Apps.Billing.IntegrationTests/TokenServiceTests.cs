@@ -473,6 +473,7 @@ public class TokenServiceTests : BillingIntegrationTest
             Id = id,
             PaidEntityId = paidEntityId,
             OwnerId = ownerId ?? paidEntityId,
+            ServiceId = ServiceId.LaraueBoards,
             Status = TokenSpentStatus.Confirmed,
             Reason = TokenTransactionReason.Spend,
             CreatedAt = createdAt,

@@ -14,7 +14,9 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                 name: "service_id",
                 table: "token_transactions",
                 type: "integer",
-                nullable: true);
+                nullable: false,
+                // Every existing ledger row is a Laraue Boards one (ServiceId.LaraueBoards = 1).
+                defaultValue: 1);
         }
 
         /// <inheritdoc />

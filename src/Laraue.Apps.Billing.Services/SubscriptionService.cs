@@ -186,9 +186,9 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
             grantMonthlyAllowance = true;
         }
 
-        await ApplyDailyGrantTopUpIfNeededAsync(tariffId, paidEntityId, balance, now, cancellationToken);
+        await ApplyDailyGrantTopUpIfNeededAsync(serviceId, tariffId, paidEntityId, balance, now, cancellationToken);
         await ApplyMonthlyGrantTopUpIfNeededAsync(
-            tariffId, paidEntityId, balance, now, grantMonthlyAllowance, cancellationToken);
+            serviceId, tariffId, paidEntityId, balance, now, grantMonthlyAllowance, cancellationToken);
 
         await context.SaveChangesAsync(cancellationToken);
 
@@ -204,6 +204,7 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
     /// are being discarded, not carried forward.
     /// </summary>
     private async Task ApplyDailyGrantTopUpIfNeededAsync(
+        ServiceId serviceId,
         Guid tariffId,
         Guid paidEntityId,
         BalanceSubscriptionToken balance,
@@ -235,6 +236,7 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
             Id = Guid.NewGuid(),
             PaidEntityId = paidEntityId,
             OwnerId = paidEntityId,
+            ServiceId = serviceId,
             Status = TokenSpentStatus.Confirmed,
             Reason = TokenTransactionReason.DailyGrant,
             CreatedAt = now,
@@ -255,6 +257,7 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
     /// the balance even though unused tokens from the prior month are discarded.
     /// </summary>
     private async Task ApplyMonthlyGrantTopUpIfNeededAsync(
+        ServiceId serviceId,
         Guid tariffId,
         Guid paidEntityId,
         BalanceSubscriptionToken balance,
@@ -289,6 +292,7 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
             Id = Guid.NewGuid(),
             PaidEntityId = paidEntityId,
             OwnerId = paidEntityId,
+            ServiceId = serviceId,
             Status = TokenSpentStatus.Confirmed,
             Reason = TokenTransactionReason.TariffGrant,
             CreatedAt = now,

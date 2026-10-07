@@ -692,7 +692,7 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("reserved_amount");
 
-                    b.Property<int?>("ServiceId")
+                    b.Property<int>("ServiceId")
                         .HasColumnType("integer")
                         .HasColumnName("service_id");
 

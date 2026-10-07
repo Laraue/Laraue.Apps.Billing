@@ -10,10 +10,10 @@ public class TokenTransaction
     public Guid OwnerId { get; set; }
 
     /// <summary>
-    /// The service the tokens were spent in. Set on a spend reservation (the metrics label), null for
-    /// grants, purchases and expiries, and for spends made before the column existed.
+    /// The service the row belongs to: where the tokens were spent, or the service whose tariff or payment
+    /// granted them. The metrics label of a spend.
     /// </summary>
-    public ServiceId? ServiceId { get; set; }
+    public ServiceId ServiceId { get; set; }
 
     public TokenSpentStatus Status { get; set; }
     public DateTime CreatedAt { get; set; }
