@@ -26,6 +26,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Laraue.Apps.Billing.WorkerH
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Laraue.Apps.Billing.Payments.Robokassa", "src\Laraue.Apps.Billing.Payments.Robokassa\Laraue.Apps.Billing.Payments.Robokassa.csproj", "{FE0F85E2-AF18-46E6-A5E1-5E1BA27BD3DD}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Laraue.Apps.Billing.WorkerServices", "src\Laraue.Apps.Billing.WorkerServices\Laraue.Apps.Billing.WorkerServices.csproj", "{BD8FE493-A79E-4F2D-8915-1665727C43F7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -156,6 +158,18 @@ Global
 		{FE0F85E2-AF18-46E6-A5E1-5E1BA27BD3DD}.Release|x64.Build.0 = Release|Any CPU
 		{FE0F85E2-AF18-46E6-A5E1-5E1BA27BD3DD}.Release|x86.ActiveCfg = Release|Any CPU
 		{FE0F85E2-AF18-46E6-A5E1-5E1BA27BD3DD}.Release|x86.Build.0 = Release|Any CPU
+		{BD8FE493-A79E-4F2D-8915-1665727C43F7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BD8FE493-A79E-4F2D-8915-1665727C43F7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BD8FE493-A79E-4F2D-8915-1665727C43F7}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{BD8FE493-A79E-4F2D-8915-1665727C43F7}.Debug|x64.Build.0 = Debug|Any CPU
+		{BD8FE493-A79E-4F2D-8915-1665727C43F7}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{BD8FE493-A79E-4F2D-8915-1665727C43F7}.Debug|x86.Build.0 = Debug|Any CPU
+		{BD8FE493-A79E-4F2D-8915-1665727C43F7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BD8FE493-A79E-4F2D-8915-1665727C43F7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BD8FE493-A79E-4F2D-8915-1665727C43F7}.Release|x64.ActiveCfg = Release|Any CPU
+		{BD8FE493-A79E-4F2D-8915-1665727C43F7}.Release|x64.Build.0 = Release|Any CPU
+		{BD8FE493-A79E-4F2D-8915-1665727C43F7}.Release|x86.ActiveCfg = Release|Any CPU
+		{BD8FE493-A79E-4F2D-8915-1665727C43F7}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -172,5 +186,6 @@ Global
 		{5D6A0161-3D41-4B72-A66C-2260889C24EA} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{A548D8A7-7291-4153-832F-AD1B7BC1BD0A} = {5563ACB5-3B77-4AEE-8B67-209330935856}
 		{FE0F85E2-AF18-46E6-A5E1-5E1BA27BD3DD} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{BD8FE493-A79E-4F2D-8915-1665727C43F7} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

@@ -18,17 +18,5 @@ public static class ServiceCollectionExtensions
 
             return services;
         }
-
-        /// <summary>
-        /// Registers the database-backed gauges. For a single host only (WorkerHost), see <see cref="BillingStateMetrics"/>.
-        /// </summary>
-        public IServiceCollection AddBillingStateMetrics()
-        {
-            services.AddBillingMetrics();
-            services.AddSingleton<BillingStateMetrics>();
-            services.AddHostedService(sp => sp.GetRequiredService<BillingStateMetrics>());
-
-            return services;
-        }
     }
 }

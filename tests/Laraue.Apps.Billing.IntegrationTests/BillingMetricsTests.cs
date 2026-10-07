@@ -6,6 +6,7 @@ using Laraue.Apps.Billing.IntegrationTests.Infrastructure;
 using Laraue.Apps.Billing.Services;
 using Laraue.Apps.Billing.Services.Metrics;
 using Laraue.Apps.Billing.Services.Payments;
+using Laraue.Apps.Billing.WorkerServices;
 using Laraue.Core.DateTime.Services.Impl;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;

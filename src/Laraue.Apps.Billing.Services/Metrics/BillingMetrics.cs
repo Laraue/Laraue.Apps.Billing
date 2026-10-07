@@ -7,7 +7,7 @@ namespace Laraue.Apps.Billing.Services.Metrics;
 /// Billing's event counters, recorded by the host that handles the event (the token ledger over gRPC, payment
 /// creation over gRPC, payment notifications on the web host). Every label has a few values at most: never
 /// a payment, user or organization id. State that must survive a restart is a gauge, see
-/// <see cref="BillingStateMetrics"/>. A metric is recorded when the code runs, before the caller's
+/// <c>BillingStateMetrics</c> in WorkerServices. A metric is recorded when the code runs, before the caller's
 /// transaction commits, so a rolled-back transaction can overcount slightly.
 /// </summary>
 public sealed class BillingMetrics

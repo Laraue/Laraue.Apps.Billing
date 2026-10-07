@@ -1,13 +1,14 @@
 using System.Diagnostics.Metrics;
 using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.DataAccess.Entities;
+using Laraue.Apps.Billing.Services.Metrics;
 using Laraue.Core.DateTime.Services.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Laraue.Apps.Billing.Services.Metrics;
+namespace Laraue.Apps.Billing.WorkerServices;
 
 /// <summary>
 /// Gauges of Billing's state, read from the database: they answer "what is true now" and survive a restart,
