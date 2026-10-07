@@ -1,3 +1,4 @@
+using Google.Protobuf.WellKnownTypes;
 using Laraue.Apps.Billing.DataAccess;
 using Grpc.Core;
 using Laraue.Apps.Billing.Services;
@@ -80,7 +81,16 @@ public sealed class SubscriptionGrpcService(DatabaseContext dbContext, ISubscrip
 
     private static Internal.Contracts.ActiveSubscriptionResponse ToResponse(ActiveSubscription subscription)
     {
-        var response = new Internal.Contracts.ActiveSubscriptionResponse { Code = subscription.Code };
+        var response = new Internal.Contracts.ActiveSubscriptionResponse
+        {
+            Code = subscription.Code,
+            LimitPeriodStartedAt = Timestamp.FromDateTime(DateTime.SpecifyKind(subscription.LimitPeriodStartedAt, DateTimeKind.Utc)),
+            PeriodResets = subscription.PeriodResets,
+        };
+        if (subscription.PeriodEndsAt is { } periodEndsAt)
+        {
+            response.PeriodEndsAt = Timestamp.FromDateTime(DateTime.SpecifyKind(periodEndsAt, DateTimeKind.Utc));
+        }
 
         switch (subscription)
         {

@@ -125,12 +125,22 @@ public sealed class TokenGrpcService(DatabaseContext dbContext, ITokenService to
         return ToResponse(balance);
     }
 
-    private static Internal.Contracts.TokenBalanceResponse ToResponse(TokenBalance balance) => new()
+    private static Internal.Contracts.TokenBalanceResponse ToResponse(TokenBalance balance)
     {
-        FreeTokensCount = balance.FreeTokensCount,
-        SubscriptionTokensCount = balance.SubscriptionTokensCount,
-        PurchasedTokensCount = balance.PurchasedTokensCount,
-    };
+        var response = new Internal.Contracts.TokenBalanceResponse
+        {
+            FreeTokensCount = balance.FreeTokensCount,
+            SubscriptionTokensCount = balance.SubscriptionTokensCount,
+            PurchasedTokensCount = balance.PurchasedTokensCount,
+            PurchasedTokensExpiringCount = balance.PurchasedTokensExpiringCount,
+        };
+        if (balance.PurchasedTokensExpireAt is { } expireAt)
+        {
+            response.PurchasedTokensExpireAt = Timestamp.FromDateTime(DateTime.SpecifyKind(expireAt, DateTimeKind.Utc));
+        }
+
+        return response;
+    }
 
     public override async Task<Internal.Contracts.GetTokenTransactionsResponse> GetTokenTransactions(
         Internal.Contracts.GetTokenTransactionsRequest request,

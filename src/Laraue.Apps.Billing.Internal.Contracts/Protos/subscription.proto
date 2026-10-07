@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "google/protobuf/timestamp.proto";
+
 option csharp_namespace = "Laraue.Apps.Billing.Internal.Contracts";
 package laraue.apps.billing.internal.v1;
 
@@ -35,6 +37,15 @@ message GetActiveOrganizationSubscriptionRequest {
 
 message ActiveSubscriptionResponse {
   string code = 1;
+
+  // The start of the period the plan's limits (e.g. issues per month) are counted in: the rolling month
+  // of a Free plan (it starts when the plan is provisioned and is renewed by the first use after it
+  // is over), the calendar month of a paid plan.
+  google.protobuf.Timestamp limit_period_started_at = 5;
+  // When the current period of the plan ends. Not set when it has no end. period_resets says what
+  // happens then: the allowance starts over (a Free plan) or the plan ends (a paid one).
+  google.protobuf.Timestamp period_ends_at = 6;
+  bool period_resets = 7;
 
   oneof payload {
     LaraueBoardsPersonalSubscription laraue_boards_personal = 2;
