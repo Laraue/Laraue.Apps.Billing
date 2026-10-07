@@ -262,9 +262,8 @@ directly, and rather than adding a host-specific read or DTO to a core service i
 ## Metrics
 
 Prometheus metrics on every host's `/_metrics` (`System.Diagnostics.Metrics`, meter `Laraue.Apps.Billing`,
-`BillingMetrics`/`BillingStateMetrics` in `Services/Metrics`); each host adds the meter with `AddMeter`. Set up
-for the Grafana dashboards of BRD-275: `ops/prometheus/scrape.yml`, `ops/prometheus/billing-alerts.yml`,
-`ops/grafana/billing-dashboard.json`.
+`BillingMetrics`/`BillingStateMetrics` in `Services/Metrics`); each host adds the meter with `AddMeter`. Scrape
+config, alert rules and the Grafana dashboard are not kept in this repo.
 
 - **Naming**: instrument names are dotted, `billing.<noun>.<verb or state>` (the exporter turns them into
   `billing_<noun>_<verb>_total` for counters, `_seconds` for a unit of `s`). A new metric goes into `BillingMetrics`
