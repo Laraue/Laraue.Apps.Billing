@@ -52,4 +52,16 @@ public static class DatabaseFacadeExtensions
             [lockKey],
             cancellationToken);
     }
+
+    /// <summary>
+    /// Locks one payment until the transaction ends. Everything that changes a payment's status takes it (the
+    /// notification handler, the job that expires abandoned payments), so two of them never interleave on one
+    /// payment. Prefixed, because the per-paid-entity locks (tokens, subscriptions, fulfilment) use a bare id as
+    /// their key and must never share a key with a payment lock.
+    /// </summary>
+    public static Task PgAdvisoryPaymentXactLock(
+        this DatabaseFacade facade,
+        Guid paymentId,
+        CancellationToken cancellationToken = default)
+        => facade.PgAdvisoryXactLock($"payment:{paymentId}", cancellationToken);
 }

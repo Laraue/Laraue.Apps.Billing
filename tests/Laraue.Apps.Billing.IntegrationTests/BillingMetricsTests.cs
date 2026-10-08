@@ -1,6 +1,7 @@
 using System.Diagnostics.Metrics;
 using System.Security.Cryptography;
 using System.Text;
+using Laraue.Apps.Billing.DataAccess.Data;
 using Laraue.Apps.Billing.DataAccess.Entities;
 using Laraue.Apps.Billing.IntegrationTests.Infrastructure;
 using Laraue.Apps.Billing.Services;
@@ -135,6 +136,57 @@ public class BillingMetricsTests : BillingIntegrationTest
         Assert.True(measurements["billing.payments.pending"] >= 1);
         Assert.True(measurements["billing.payments.pending.oldest_age"] >= 0);
         Assert.True(measurements["billing.subscriptions.active"] >= 1);
+    }
+
+    [Fact]
+    public async Task StateMetrics_ShouldKeepPersonalAndTeamTariffsApart_WhenBothAreTitledFree()
+    {
+        // Laraue Boards has a Personal and a Team tariff, both titled "Free".
+        foreach (var tariff in new[]
+                 {
+                     LaraueBoardsTariffsData.PersonalTariffs.Select(x => x.Tariff).Single(x => x.IsFree),
+                     LaraueBoardsTariffsData.TeamTariffs.Select(x => x.Tariff).Single(x => x.IsFree),
+                 })
+        {
+            var paidEntityId = Guid.NewGuid();
+            Context.Subscriptions.Add(new Subscription
+            {
+                Id = Guid.NewGuid(),
+                ServiceId = ServiceId.LaraueBoards,
+                TariffId = tariff.Id,
+                OwnerId = paidEntityId,
+                PaidEntityId = paidEntityId,
+                Status = SubscriptionStatus.Active,
+                CurrentPeriodStartedAt = DateTime.UtcNow,
+            });
+        }
+
+        await Context.SaveChangesAsync();
+
+        using var meters = new ServiceCollection().AddMetrics().BuildServiceProvider();
+        var stateMetrics = new BillingStateMetrics(
+            meters.GetRequiredService<IMeterFactory>(),
+            _host.Services.GetRequiredService<IServiceScopeFactory>(),
+            new DateTimeProvider(),
+            NullLogger<BillingStateMetrics>.Instance);
+        await stateMetrics.RefreshAsync(CancellationToken.None);
+
+        var series = new List<string>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name == BillingMetrics.MeterName && instrument.Name == "billing.subscriptions.active")
+            {
+                l.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, value, tags, _) =>
+            series.Add(string.Join(",", tags.ToArray().OrderBy(x => x.Key).Select(x => $"{x.Key}={x.Value}")) + $":{value}"));
+        listener.Start();
+        listener.RecordObservableInstruments();
+
+        Assert.Contains("service=LaraueBoards,tariff=Free,type=Personal:1", series);
+        Assert.Contains("service=LaraueBoards,tariff=Free,type=Team:1", series);
     }
 
     private async Task<Payment> CreatePaymentAsync()

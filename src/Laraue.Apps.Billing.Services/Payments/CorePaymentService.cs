@@ -329,7 +329,7 @@ public class CorePaymentService(
         var paymentId = await FindPaymentIdAsync(provider.Code, notification, trace, cancellationToken);
 
         // Two deliveries of the same notification must not fulfil the payment twice.
-        await context.Database.PgAdvisoryXactLock(paymentId.ToString(), cancellationToken);
+        await context.Database.PgAdvisoryPaymentXactLock(paymentId, cancellationToken);
 
         var payment = await context.Payments.SingleAsync(x => x.Id == paymentId, cancellationToken);
 
