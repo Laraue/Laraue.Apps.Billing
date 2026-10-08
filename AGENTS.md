@@ -80,7 +80,7 @@ apps (`Laraue.Apps.Boards`) can reference it - see "NuGet publishing" below.
   packs that still have tokens, and `PurchasedTokensExpiringCount` how many tokens expire then (the packs
   expiring at that moment, not all the purchased ones).
 - `Payment` - a customer's attempt to pay for a tariff or a token pack (`Kind`), in minor units of
-  `CurrencyCode`, with a `Status` (Pending/Paid/Failed/Canceled/Expired). Provider-agnostic on purpose: the
+  `CurrencyCode`, with a `Status` (Pending/Paid/Failed/Canceled). Provider-agnostic on purpose: the
   provider is a string code (`Provider`), and its own references live only in `ProviderPaymentId`
   (unique per provider, opaque) and `ProviderData` (jsonb, read/written only by that provider's
   code). Never add a column for one provider's quirk (e.g. an integer invoice number) - keep it in
@@ -114,14 +114,6 @@ payment cannot be identified - the success page proves nothing, only a notificat
 `AddWebApiServices(configuration)`; options are validated lazily, on first use. Configure
 `Payments:Robokassa` (`MerchantLogin`, passwords, `IsTest: false` in production) via secrets; the
 Robokassa shop settings must point ResultURL/SuccessURL/FailURL to these addresses.
-
-**Abandoned checkouts.** A provider only reports a payment that was made (Robokassa notifies on success), so a
-customer who opens the checkout and leaves would leave a `Pending` payment forever. `ExpireStalePaymentsJob`
-(`WorkerServices`, every 5 minutes) marks a payment still Pending after `Payments:PendingExpiration` (default 1 hour)
-as `Expired`, under the same per-payment advisory lock as the notification handler. Expired is not final: a
-notification that the customer did pay still fulfils it (`HandleNotificationAsync` fulfils anything not paid yet), so a
-late payer is not lost. It lives in the worker rather than `ICorePaymentService` because the worker has no payment
-provider configuration, which that service needs.
 
 **Callback design.** One generic `PaymentsController` handles every provider's callbacks, with the provider
 code in the route. A model binder (`PaymentCallbackModelBinder`, `[FromPaymentCallback]`) turns a request into a
@@ -281,11 +273,11 @@ config, alert rules and the Grafana dashboard are not kept in this repo.
   with a typed `Record...` method, never a raw counter in a service.
 - **Counters are events** (`rate`/`increase` in Grafana), recorded by the host that handles the event:
   `billing_tokens_spent_total{service}` (on commit, the actual amount), `billing_token_reservations_total{service,result}`,
-  `billing_payments_created_total{provider,kind,currency}`, `billing_payments_completed_total{provider,kind,status}` (status Paid, Failed, Canceled or Expired),
+  `billing_payments_created_total{provider,kind,currency}`, `billing_payments_completed_total{provider,kind,status}`,
   `billing_payments_amount_total{provider,currency}` (minor units, paid only), `billing_payment_notifications_total{provider,result}`
   and `billing_payment_notification_duration_seconds`. Sum over hosts in a query.
-- **Gauges are state**, read from the database, so they survive a restart: `billing_subscriptions_active{service,tariff,type}` (type Personal or Team: Boards has a Personal and a Team tariff both titled Free),
-  `billing_payments_pending` (customers still in checkout, no older than the expiration), `billing_payments_pending_oldest_age_seconds` (above the expiration plus one job run means the expiry job is not running). Published by `WorkerHost` only
+- **Gauges are state**, read from the database, so they survive a restart: `billing_subscriptions_active{service,tariff}`,
+  `billing_payments_pending`, `billing_payments_pending_oldest_age_seconds`. Published by `WorkerHost` only
   (`BillingStateMetrics` in `WorkerServices`, registered by `AddWorkerServices`), refreshed every 30 s, so scaled web/gRPC replicas do not duplicate the series.
 - **Labels are low-cardinality**: service, tariff, provider, kind, currency, status, result. Never a payment, user or
   organization id. `TokenTransaction.ServiceId` exists so a commit/cancel knows the service.

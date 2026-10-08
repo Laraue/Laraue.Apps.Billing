@@ -41,13 +41,10 @@ public sealed class Program
         builder.Services.AddInternalApiServices(builder.Configuration);
 
         // The database-backed gauges (active subscriptions, pending payments) are published by this host only.
-        builder.Services.AddWorkerServices(builder.Configuration);
+        builder.Services.AddWorkerServices();
 
         builder.Services.AddBackgroundJob<CancelStaleTokenReservationsJob, EmptyJobData>(
             "CancelStaleTokenReservationsJob");
-
-        builder.Services.AddBackgroundJob<ExpireStalePaymentsJob, EmptyJobData>(
-            "ExpireStalePaymentsJob");
 
         builder.Services.AddHealthChecks();
 

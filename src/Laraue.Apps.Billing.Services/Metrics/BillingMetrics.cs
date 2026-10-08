@@ -67,20 +67,6 @@ public sealed class BillingMetrics
             "billing.payment.notification.duration",
             unit: "s",
             description: "Time to handle a payment notification, by provider.");
-
-        // A counter series only exists after its first event, and rate()/increase() cannot see that first
-        // event. Recording a zero for every service and result we know makes those series exist from the first
-        // scrape. Provider and currency labels are not known here, so the payment series appear with the first
-        // payment.
-        foreach (var serviceId in Enum.GetValues<ServiceId>())
-        {
-            _tokensSpent.Add(0, Tag("service", serviceId.ToString()));
-
-            foreach (var result in new[] { ReservationStarted, ReservationConfirmed, ReservationCancelled, ReservationInsufficientBalance })
-            {
-                _tokenReservations.Add(0, Tag("service", serviceId.ToString()), Tag("result", result));
-            }
-        }
     }
 
     public void RecordReservation(ServiceId serviceId, string result)
