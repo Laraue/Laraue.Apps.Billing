@@ -24,6 +24,14 @@ public sealed class BillingStateMetrics : BackgroundService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ILogger<BillingStateMetrics> _logger;
 
+    /// <summary>The windows of <c>billing.payments.recent</c>: how far back a payment's creation counts.</summary>
+    private static readonly (string Label, TimeSpan Window)[] RecentPaymentWindows =
+    [
+        ("1d", TimeSpan.FromDays(1)),
+        ("7d", TimeSpan.FromDays(7)),
+        ("30d", TimeSpan.FromDays(30)),
+    ];
+
     private volatile Snapshot _snapshot = Snapshot.Empty;
 
     public BillingStateMetrics(
@@ -51,6 +59,14 @@ public sealed class BillingStateMetrics : BackgroundService
             "billing.payments.pending",
             () => _snapshot.PendingPayments,
             description: "Payments waiting for the provider's confirmation.");
+
+        meter.CreateObservableGauge(
+            "billing.payments.recent",
+            () => _snapshot.RecentPayments.Select(x => new Measurement<long>(
+                x.Count,
+                new KeyValuePair<string, object?>("window", x.Window),
+                new KeyValuePair<string, object?>("status", x.Status.ToString()))),
+            description: "Payments created within the last 1, 7 or 30 days, by their current status (every status is always present). Read from the database, so unlike the counters it does not depend on process restarts or on a series' first event.");
 
         meter.CreateObservableGauge(
             "billing.payments.pending.oldest_age",
@@ -95,19 +111,40 @@ public sealed class BillingStateMetrics : BackgroundService
             .Select(x => new { Count = x.Count(), Oldest = x.Min(p => p.CreatedAt) })
             .SingleOrDefaultAsync(cancellationToken);
 
+        var now = _dateTimeProvider.UtcNow;
+        var recentPayments = new List<RecentPayments>();
+        foreach (var (label, window) in RecentPaymentWindows)
+        {
+            var since = now - window;
+            var byStatus = await context.Payments
+                .Where(x => x.CreatedAt >= since)
+                .GroupBy(x => x.Status)
+                .Select(x => new { Status = x.Key, Count = x.LongCount() })
+                .ToListAsync(cancellationToken);
+
+            recentPayments.AddRange(Enum.GetValues<PaymentStatus>().Select(status => new RecentPayments(
+                label,
+                status,
+                byStatus.SingleOrDefault(x => x.Status == status)?.Count ?? 0)));
+        }
+
         _snapshot = new Snapshot(
             subscriptions,
+            recentPayments,
             pending?.Count ?? 0,
             pending is null ? 0 : Math.Max(0, (_dateTimeProvider.UtcNow - pending.Oldest).TotalSeconds));
     }
 
     private sealed record ActiveSubscriptions(ServiceId Service, string Tariff, TariffType Type, long Count);
 
+    private sealed record RecentPayments(string Window, PaymentStatus Status, long Count);
+
     private sealed record Snapshot(
         IReadOnlyList<ActiveSubscriptions> ActiveSubscriptions,
+        IReadOnlyList<RecentPayments> RecentPayments,
         long PendingPayments,
         double OldestPendingPaymentAgeSeconds)
     {
-        public static readonly Snapshot Empty = new([], 0, 0);
+        public static readonly Snapshot Empty = new([], [], 0, 0);
     }
 }

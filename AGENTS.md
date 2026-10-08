@@ -285,7 +285,7 @@ config, alert rules and the Grafana dashboard are not kept in this repo.
   `billing_payments_amount_total{provider,currency}` (minor units, paid only), `billing_payment_notifications_total{provider,result}`
   and `billing_payment_notification_duration_seconds`. Sum over hosts in a query.
 - **Gauges are state**, read from the database, so they survive a restart: `billing_subscriptions_active{service,tariff,type}` (type Personal or Team: Boards has a Personal and a Team tariff both titled Free),
-  `billing_payments_pending` (customers still in checkout, no older than the expiration), `billing_payments_pending_oldest_age_seconds` (above the expiration plus one job run means the expiry job is not running). Published by `WorkerHost` only
+  `billing_payments_recent{window,status}` (payments created in the last 1d, 7d or 30d by their current status, every status always present: the restart-proof source for "paid / expired in the last day" and the paid share, which the counters cannot give because `increase()` does not see a series' first event), `billing_payments_pending` (customers still in checkout, no older than the expiration), `billing_payments_pending_oldest_age_seconds` (above the expiration plus one job run means the expiry job is not running). Published by `WorkerHost` only
   (`BillingStateMetrics` in `WorkerServices`, registered by `AddWorkerServices`), refreshed every 30 s, so scaled web/gRPC replicas do not duplicate the series.
 - **Labels are low-cardinality**: service, tariff, provider, kind, currency, status, result. Never a payment, user or
   organization id. `TokenTransaction.ServiceId` exists so a commit/cancel knows the service.
