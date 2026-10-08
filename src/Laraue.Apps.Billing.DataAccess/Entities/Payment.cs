@@ -107,4 +107,10 @@ public enum PaymentStatus
     /// The customer abandoned or cancelled the payment.
     /// </summary>
     Canceled,
+
+    /// <summary>
+    /// Still waiting for the provider long after the checkout was created, so most likely abandoned. Set by
+    /// the worker, not by the provider. Not final: a notification that the customer did pay still fulfils it.
+    /// </summary>
+    Expired,
 }
