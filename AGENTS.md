@@ -284,7 +284,7 @@ config, alert rules and the Grafana dashboard are not kept in this repo.
   `billing_payments_created_total{provider,kind,currency}`, `billing_payments_completed_total{provider,kind,status}` (status Paid, Failed, Canceled or Expired),
   `billing_payments_amount_total{provider,currency}` (minor units, paid only), `billing_payment_notifications_total{provider,result}`
   and `billing_payment_notification_duration_seconds`. Sum over hosts in a query.
-- **Gauges are state**, read from the database, so they survive a restart: `billing_subscriptions_active{service,tariff}`,
+- **Gauges are state**, read from the database, so they survive a restart: `billing_subscriptions_active{service,tariff,type}` (type Personal or Team: Boards has a Personal and a Team tariff both titled Free),
   `billing_payments_pending` (customers still in checkout, no older than the expiration), `billing_payments_pending_oldest_age_seconds` (above the expiration plus one job run means the expiry job is not running). Published by `WorkerHost` only
   (`BillingStateMetrics` in `WorkerServices`, registered by `AddWorkerServices`), refreshed every 30 s, so scaled web/gRPC replicas do not duplicate the series.
 - **Labels are low-cardinality**: service, tariff, provider, kind, currency, status, result. Never a payment, user or

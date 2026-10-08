@@ -43,8 +43,9 @@ public sealed class BillingStateMetrics : BackgroundService
             () => _snapshot.ActiveSubscriptions.Select(x => new Measurement<long>(
                 x.Count,
                 new KeyValuePair<string, object?>("service", x.Service.ToString()),
-                new KeyValuePair<string, object?>("tariff", x.Tariff))),
-            description: "Active subscriptions by service and tariff.");
+                new KeyValuePair<string, object?>("tariff", x.Tariff),
+                new KeyValuePair<string, object?>("type", x.Type.ToString()))),
+            description: "Active subscriptions by service, tariff title and tariff type (Personal or Team): a service can have a Personal and a Team tariff with the same title.");
 
         meter.CreateObservableGauge(
             "billing.payments.pending",
@@ -84,8 +85,8 @@ public sealed class BillingStateMetrics : BackgroundService
 
         var subscriptions = await context.Subscriptions
             .Where(x => x.Status == SubscriptionStatus.Active)
-            .GroupBy(x => new { x.ServiceId, x.Tariff!.Title })
-            .Select(x => new ActiveSubscriptions(x.Key.ServiceId, x.Key.Title, x.Count()))
+            .GroupBy(x => new { x.ServiceId, x.Tariff!.Title, x.Tariff.Type })
+            .Select(x => new ActiveSubscriptions(x.Key.ServiceId, x.Key.Title, x.Key.Type, x.Count()))
             .ToListAsync(cancellationToken);
 
         var pending = await context.Payments
@@ -100,7 +101,7 @@ public sealed class BillingStateMetrics : BackgroundService
             pending is null ? 0 : Math.Max(0, (_dateTimeProvider.UtcNow - pending.Oldest).TotalSeconds));
     }
 
-    private sealed record ActiveSubscriptions(ServiceId Service, string Tariff, long Count);
+    private sealed record ActiveSubscriptions(ServiceId Service, string Tariff, TariffType Type, long Count);
 
     private sealed record Snapshot(
         IReadOnlyList<ActiveSubscriptions> ActiveSubscriptions,
