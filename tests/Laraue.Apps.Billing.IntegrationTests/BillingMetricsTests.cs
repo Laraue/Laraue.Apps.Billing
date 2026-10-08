@@ -146,6 +146,7 @@ public class BillingMetricsTests : BillingIntegrationTest
                  {
                      LaraueBoardsTariffsData.PersonalTariffs.Select(x => x.Tariff).Single(x => x.IsFree),
                      LaraueBoardsTariffsData.TeamTariffs.Select(x => x.Tariff).Single(x => x.IsFree),
+                     LaraueBoardsTariffsData.PersonalTariffs.Select(x => x.Tariff).First(x => !x.IsFree),
                  })
         {
             var paidEntityId = Guid.NewGuid();
@@ -185,8 +186,79 @@ public class BillingMetricsTests : BillingIntegrationTest
         listener.Start();
         listener.RecordObservableInstruments();
 
-        Assert.Contains("service=LaraueBoards,tariff=Free,type=Personal:1", series);
-        Assert.Contains("service=LaraueBoards,tariff=Free,type=Team:1", series);
+        Assert.Contains("plan=free,service=LaraueBoards,tariff=Free,type=Personal:1", series);
+        Assert.Contains("plan=free,service=LaraueBoards,tariff=Free,type=Team:1", series);
+        Assert.Contains(series, x => x.StartsWith("plan=paid,service=LaraueBoards,tariff=") && x.Contains("type=Personal:"));
+    }
+
+    [Fact]
+    public async Task StateMetrics_ShouldCountRecentPaymentsByWindowAndStatus_WhenRefreshed()
+    {
+        await SeedPaymentAsync(PaymentStatus.Paid, TimeSpan.FromHours(2));
+        await SeedPaymentAsync(PaymentStatus.Expired, TimeSpan.FromDays(3));
+        await SeedPaymentAsync(PaymentStatus.Failed, TimeSpan.FromDays(10));
+        await SeedPaymentAsync(PaymentStatus.Paid, TimeSpan.FromDays(40));
+        await SeedPaymentAsync(PaymentStatus.Pending, TimeSpan.FromMinutes(10));
+
+        using var meters = new ServiceCollection().AddMetrics().BuildServiceProvider();
+        var stateMetrics = new BillingStateMetrics(
+            meters.GetRequiredService<IMeterFactory>(),
+            _host.Services.GetRequiredService<IServiceScopeFactory>(),
+            new DateTimeProvider(),
+            NullLogger<BillingStateMetrics>.Instance);
+        await stateMetrics.RefreshAsync(CancellationToken.None);
+
+        var series = new Dictionary<string, long>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Meter.Name == BillingMetrics.MeterName && instrument.Name == "billing.payments.recent")
+            {
+                l.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, value, tags, _) =>
+        {
+            var window = tags.ToArray().Single(x => x.Key == "window").Value;
+            var status = tags.ToArray().Single(x => x.Key == "status").Value;
+            series[$"{window}/{status}"] = value;
+        });
+        listener.Start();
+        listener.RecordObservableInstruments();
+
+        // Every status is present in every window, even when nothing is in it.
+        Assert.Equal(3 * Enum.GetValues<PaymentStatus>().Length, series.Count);
+
+        Assert.Equal(1, series["1d/Paid"]);
+        Assert.Equal(1, series["7d/Paid"]);
+        Assert.Equal(1, series["30d/Paid"]);
+        Assert.Equal(0, series["1d/Expired"]);
+        Assert.Equal(1, series["7d/Expired"]);
+        Assert.Equal(0, series["7d/Failed"]);
+        Assert.Equal(1, series["30d/Failed"]);
+        Assert.Equal(1, series["1d/Pending"]);
+        Assert.Equal(0, series["1d/Canceled"]);
+    }
+
+    private async Task SeedPaymentAsync(PaymentStatus status, TimeSpan age)
+    {
+        var userId = Guid.NewGuid();
+        Context.Payments.Add(new Payment
+        {
+            Id = Guid.NewGuid(),
+            ServiceId = ServiceId.LaraueBoards,
+            Kind = PaymentKind.Subscription,
+            PaidEntityId = userId,
+            OwnerId = userId,
+            TariffId = PersonalPlusTariffId,
+            AmountMinorUnits = 33_400,
+            CurrencyCode = "RUB",
+            Status = status,
+            Provider = "robokassa",
+            CreatedAt = DateTime.UtcNow - age,
+        });
+
+        await Context.SaveChangesAsync();
     }
 
     private async Task<Payment> CreatePaymentAsync()
