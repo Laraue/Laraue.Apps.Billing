@@ -2,6 +2,7 @@ using Laraue.Apps.Billing.DataAccess;
 using Laraue.Apps.Billing.DataAccess.Entities;
 using Laraue.Apps.Billing.Services;
 using Laraue.Apps.Billing.Services.Metrics;
+using Laraue.Apps.Billing.Services.Payments;
 using Laraue.Core.DateTime.Services.Abstractions;
 using Laraue.Core.Extensions.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -94,7 +95,7 @@ public class ExpireStalePaymentsJob(
         TimeSpan expiration,
         CancellationToken cancellationToken)
     {
-        await context.Database.PgAdvisoryXactLock(paymentId.ToString(), cancellationToken);
+        await context.Database.PgAdvisoryXactLock(PaymentLock.Key(paymentId), cancellationToken);
 
         // Read again under the lock: a notification may have paid the payment since the sweep listed it.
         var payment = await context.Payments.SingleAsync(x => x.Id == paymentId, cancellationToken);
