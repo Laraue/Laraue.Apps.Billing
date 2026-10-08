@@ -52,8 +52,9 @@ public sealed class BillingStateMetrics : BackgroundService
                 x.Count,
                 new KeyValuePair<string, object?>("service", x.Service.ToString()),
                 new KeyValuePair<string, object?>("tariff", x.Tariff),
-                new KeyValuePair<string, object?>("type", x.Type.ToString()))),
-            description: "Active subscriptions by service, tariff title and tariff type (Personal or Team): a service can have a Personal and a Team tariff with the same title.");
+                new KeyValuePair<string, object?>("type", x.Type.ToString()),
+                new KeyValuePair<string, object?>("plan", x.IsFree ? "free" : "paid"))),
+            description: "Active subscriptions by service, tariff title, tariff type (Personal or Team: a service can have both with the same title) and plan (free or paid).");
 
         meter.CreateObservableGauge(
             "billing.payments.pending",
@@ -101,8 +102,8 @@ public sealed class BillingStateMetrics : BackgroundService
 
         var subscriptions = await context.Subscriptions
             .Where(x => x.Status == SubscriptionStatus.Active)
-            .GroupBy(x => new { x.ServiceId, x.Tariff!.Title, x.Tariff.Type })
-            .Select(x => new ActiveSubscriptions(x.Key.ServiceId, x.Key.Title, x.Key.Type, x.Count()))
+            .GroupBy(x => new { x.ServiceId, x.Tariff!.Title, x.Tariff.Type, x.Tariff.IsFree })
+            .Select(x => new ActiveSubscriptions(x.Key.ServiceId, x.Key.Title, x.Key.Type, x.Key.IsFree, x.Count()))
             .ToListAsync(cancellationToken);
 
         var pending = await context.Payments
@@ -135,7 +136,7 @@ public sealed class BillingStateMetrics : BackgroundService
             pending is null ? 0 : Math.Max(0, (_dateTimeProvider.UtcNow - pending.Oldest).TotalSeconds));
     }
 
-    private sealed record ActiveSubscriptions(ServiceId Service, string Tariff, TariffType Type, long Count);
+    private sealed record ActiveSubscriptions(ServiceId Service, string Tariff, TariffType Type, bool IsFree, long Count);
 
     private sealed record RecentPayments(string Window, PaymentStatus Status, long Count);
 

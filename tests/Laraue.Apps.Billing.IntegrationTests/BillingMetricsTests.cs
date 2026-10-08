@@ -146,6 +146,7 @@ public class BillingMetricsTests : BillingIntegrationTest
                  {
                      LaraueBoardsTariffsData.PersonalTariffs.Select(x => x.Tariff).Single(x => x.IsFree),
                      LaraueBoardsTariffsData.TeamTariffs.Select(x => x.Tariff).Single(x => x.IsFree),
+                     LaraueBoardsTariffsData.PersonalTariffs.Select(x => x.Tariff).First(x => !x.IsFree),
                  })
         {
             var paidEntityId = Guid.NewGuid();
@@ -185,8 +186,9 @@ public class BillingMetricsTests : BillingIntegrationTest
         listener.Start();
         listener.RecordObservableInstruments();
 
-        Assert.Contains("service=LaraueBoards,tariff=Free,type=Personal:1", series);
-        Assert.Contains("service=LaraueBoards,tariff=Free,type=Team:1", series);
+        Assert.Contains("plan=free,service=LaraueBoards,tariff=Free,type=Personal:1", series);
+        Assert.Contains("plan=free,service=LaraueBoards,tariff=Free,type=Team:1", series);
+        Assert.Contains(series, x => x.StartsWith("plan=paid,service=LaraueBoards,tariff=") && x.Contains("type=Personal:"));
     }
 
     [Fact]
