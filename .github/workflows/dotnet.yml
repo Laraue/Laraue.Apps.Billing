@@ -91,13 +91,13 @@ jobs:
             artifact: internal-api-host
             archive: internal-api-host.tar.gz
             remote_dir: /home/laraue/billing-internal-api-host
-            image: billinginternalapihost
+            image: billing-internal-api-host
             environment: internalapi-production
           - name: Billing Worker Host
             artifact: worker-host
             archive: worker-host.tar.gz
             remote_dir: /home/laraue/billing-worker-host
-            image: billingworkerhost
+            image: billing-worker-host
             environment: worker-production
     environment: ${{ matrix.environment }}
     steps:
