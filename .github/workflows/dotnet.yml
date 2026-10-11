@@ -84,8 +84,8 @@ jobs:
           - name: Billing Web API Host
             artifact: webapi-host
             archive: webapi-host.tar.gz
-            remote_dir: /home/laraue/billing-webapi-host
-            image: billingwebapihost
+            remote_dir: /home/laraue/billing-web-api-host
+            image: billing-web-api-host
             environment: webapi-production
           - name: Billing Internal API Host
             artifact: internal-api-host
