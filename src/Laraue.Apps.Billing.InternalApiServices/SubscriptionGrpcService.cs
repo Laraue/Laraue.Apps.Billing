@@ -98,6 +98,8 @@ public sealed class SubscriptionGrpcService(DatabaseContext dbContext, ISubscrip
                 var personal = new Internal.Contracts.LaraueBoardsPersonalSubscription
                 {
                     IncludedTokensCount = s.IncludedTokensCount,
+                    StorageQuotaBytes = s.StorageQuotaBytes,
+                    StorageAddonId = s.StorageAddonId?.ToString() ?? string.Empty,
                 };
                 if (s.LimitIssuesPerMonth is { } personalLimit) personal.LimitIssuesPerMonth = personalLimit;
                 if (s.LimitFreeTeamOrganizationsCount is { } limitOrgs) personal.LimitFreeTeamOrganizationsCount = limitOrgs;
@@ -108,6 +110,8 @@ public sealed class SubscriptionGrpcService(DatabaseContext dbContext, ISubscrip
                 var team = new Internal.Contracts.LaraueBoardsTeamSubscription
                 {
                     IncludedTokensCount = s.IncludedTokensCount,
+                    StorageQuotaBytes = s.StorageQuotaBytes,
+                    StorageAddonId = s.StorageAddonId?.ToString() ?? string.Empty,
                 };
                 if (s.LimitIssuesPerMonth is { } teamLimit) team.LimitIssuesPerMonth = teamLimit;
                 response.LaraueBoardsTeam = team;

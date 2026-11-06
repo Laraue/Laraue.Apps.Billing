@@ -131,6 +131,10 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<int>("IncludedStorageMegabytes")
+                        .HasColumnType("integer")
+                        .HasColumnName("included_storage_megabytes");
+
                     b.Property<int?>("LimitFreeTeamOrganizationsCount")
                         .HasColumnType("integer")
                         .HasColumnName("limit_free_team_organizations_count");
@@ -148,12 +152,14 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         new
                         {
                             Id = new Guid("bd5f3457-601d-4ef1-92b2-47353f6b5a8f"),
+                            IncludedStorageMegabytes = 100,
                             LimitFreeTeamOrganizationsCount = 1,
                             LimitIssuesPerMonth = 500
                         },
                         new
                         {
                             Id = new Guid("e8e4b409-366d-4803-b116-76c1a4a6c8f1"),
+                            IncludedStorageMegabytes = 1024,
                             LimitIssuesPerMonth = 50000
                         });
                 });
@@ -163,6 +169,10 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<int>("IncludedStorageMegabytes")
+                        .HasColumnType("integer")
+                        .HasColumnName("included_storage_megabytes");
 
                     b.Property<int?>("LimitIssuesPerMonth")
                         .HasColumnType("integer")
@@ -177,16 +187,19 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         new
                         {
                             Id = new Guid("d42ebf59-008f-4a1e-8a00-c00f27331e86"),
+                            IncludedStorageMegabytes = 100,
                             LimitIssuesPerMonth = 500
                         },
                         new
                         {
                             Id = new Guid("89111f8d-292b-4f04-8766-b521e19e6964"),
+                            IncludedStorageMegabytes = 1024,
                             LimitIssuesPerMonth = 50000
                         },
                         new
                         {
                             Id = new Guid("bb78563f-631c-4f96-afdd-c35ab02b077e"),
+                            IncludedStorageMegabytes = 1024,
                             LimitIssuesPerMonth = 200000
                         });
                 });
@@ -284,6 +297,10 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("status");
 
+                    b.Property<Guid?>("StorageAddonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("storage_addon_id");
+
                     b.Property<Guid?>("TariffId")
                         .HasColumnType("uuid")
                         .HasColumnName("tariff_id");
@@ -294,6 +311,9 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_payments");
+
+                    b.HasIndex("StorageAddonId")
+                        .HasDatabaseName("ix_payments_storage_addon_id");
 
                     b.HasIndex("TariffId")
                         .HasDatabaseName("ix_payments_tariff_id");
@@ -384,6 +404,72 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.StorageAddon", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("code");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<int>("Price")
+                        .HasColumnType("integer")
+                        .HasColumnName("price");
+
+                    b.Property<int>("ServiceId")
+                        .HasColumnType("integer")
+                        .HasColumnName("service_id");
+
+                    b.Property<int>("StorageMegabytes")
+                        .HasColumnType("integer")
+                        .HasColumnName("storage_megabytes");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id")
+                        .HasName("pk_storage_addons");
+
+                    b.HasIndex("ServiceId")
+                        .HasDatabaseName("ix_storage_addons_service_id");
+
+                    b.ToTable("storage_addons", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("5c0d1d0e-8a4f-4f2b-9a3e-1f6b7c2d4e10"),
+                            Code = "storage_10gb",
+                            IsActive = true,
+                            Price = 100,
+                            ServiceId = 1,
+                            StorageMegabytes = 10240,
+                            Title = "+10 GB"
+                        },
+                        new
+                        {
+                            Id = new Guid("9e2a6b3f-4c1d-4e8a-b7f0-3d5c8a1e6b50"),
+                            Code = "storage_50gb",
+                            IsActive = true,
+                            Price = 300,
+                            ServiceId = 1,
+                            StorageMegabytes = 51200,
+                            Title = "+50 GB"
+                        });
+                });
+
             modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.Subscription", b =>
                 {
                     b.Property<Guid>("Id")
@@ -419,12 +505,19 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("status");
 
+                    b.Property<Guid?>("StorageAddonId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("storage_addon_id");
+
                     b.Property<Guid>("TariffId")
                         .HasColumnType("uuid")
                         .HasColumnName("tariff_id");
 
                     b.HasKey("Id")
                         .HasName("pk_subscriptions");
+
+                    b.HasIndex("StorageAddonId")
+                        .HasDatabaseName("ix_subscriptions_storage_addon_id");
 
                     b.HasIndex("TariffId")
                         .HasDatabaseName("ix_subscriptions_tariff_id");
@@ -844,6 +937,12 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
 
             modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.Payment", b =>
                 {
+                    b.HasOne("Laraue.Apps.Billing.DataAccess.Entities.StorageAddon", null)
+                        .WithMany()
+                        .HasForeignKey("StorageAddonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_payments_storage_addons_storage_addon_id");
+
                     b.HasOne("Laraue.Apps.Billing.DataAccess.Entities.Tariff", null)
                         .WithMany()
                         .HasForeignKey("TariffId")
@@ -869,6 +968,18 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                     b.Navigation("TokenPack");
                 });
 
+            modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.StorageAddon", b =>
+                {
+                    b.HasOne("Laraue.Apps.Billing.DataAccess.Entities.Service", "Service")
+                        .WithMany()
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_storage_addons_services_service_id");
+
+                    b.Navigation("Service");
+                });
+
             modelBuilder.Entity("Laraue.Apps.Billing.DataAccess.Entities.Subscription", b =>
                 {
                     b.HasOne("Laraue.Apps.Billing.DataAccess.Entities.Service", "Service")
@@ -878,6 +989,12 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_subscriptions_services_service_id");
 
+                    b.HasOne("Laraue.Apps.Billing.DataAccess.Entities.StorageAddon", "StorageAddon")
+                        .WithMany()
+                        .HasForeignKey("StorageAddonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_subscriptions_storage_addons_storage_addon_id");
+
                     b.HasOne("Laraue.Apps.Billing.DataAccess.Entities.Tariff", "Tariff")
                         .WithMany()
                         .HasForeignKey("TariffId")
@@ -886,6 +1003,8 @@ namespace Laraue.Apps.Billing.DataAccess.Migrations
                         .HasConstraintName("fk_subscriptions_tariffs_tariff_id");
 
                     b.Navigation("Service");
+
+                    b.Navigation("StorageAddon");
 
                     b.Navigation("Tariff");
                 });

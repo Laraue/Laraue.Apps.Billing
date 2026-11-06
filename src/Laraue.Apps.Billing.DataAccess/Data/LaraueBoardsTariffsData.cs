@@ -15,6 +15,10 @@ public static class LaraueBoardsTariffsData
     // allowance is reset, not accumulated - see SubscriptionService.
     private const long FreeMonthlyTokensCount = 25_000;
 
+    // File storage: 100 MB on Free, 1 GB on every paid tariff (more with a storage add-on).
+    private const int FreeStorageMegabytes = 100;
+    private const int PaidStorageMegabytes = 1024;
+
     private static readonly TariffSeed<LaraueBoardsPersonalTariff> PersonalFree =
         new(
             new Tariff
@@ -33,6 +37,7 @@ public static class LaraueBoardsTariffsData
                 Id = PersonalFreeId,
                 LimitFreeTeamOrganizationsCount = 1,
                 LimitIssuesPerMonth = 500,
+                IncludedStorageMegabytes = FreeStorageMegabytes,
             });
 
     private static readonly TariffSeed<LaraueBoardsPersonalTariff> PersonalPlus =
@@ -53,6 +58,7 @@ public static class LaraueBoardsTariffsData
                 Id = PersonalPlusId,
                 LimitFreeTeamOrganizationsCount = null,
                 LimitIssuesPerMonth = 50_000,
+                IncludedStorageMegabytes = PaidStorageMegabytes,
             });
 
     private static readonly TariffSeed<LaraueBoardsTeamTariff> TeamFree =
@@ -72,6 +78,7 @@ public static class LaraueBoardsTariffsData
             {
                 Id = TeamFreeId,
                 LimitIssuesPerMonth = 500,
+                IncludedStorageMegabytes = FreeStorageMegabytes,
             });
 
     private static readonly TariffSeed<LaraueBoardsTeamTariff> Team =
@@ -91,6 +98,7 @@ public static class LaraueBoardsTariffsData
             {
                 Id = TeamId,
                 LimitIssuesPerMonth = 50_000,
+                IncludedStorageMegabytes = PaidStorageMegabytes,
             });
 
     private static readonly TariffSeed<LaraueBoardsTeamTariff> TeamBusiness =
@@ -110,6 +118,7 @@ public static class LaraueBoardsTariffsData
             {
                 Id = TeamBusinessId,
                 LimitIssuesPerMonth = 200_000,
+                IncludedStorageMegabytes = PaidStorageMegabytes,
             });
 
     public static readonly TariffSeed<LaraueBoardsTeamTariff>[] TeamTariffs =

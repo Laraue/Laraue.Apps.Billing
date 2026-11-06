@@ -88,12 +88,19 @@ public class PaymentFulfillmentService(
                 tariff.BillingPeriod);
             balance.SubscriptionTokensCount += tariff.IncludedTokensCount;
 
+            // The subscription keeps the add-on of its last payment: a bigger one applies at once, and
+            // renewing without one removes it.
+            var previousStorageAddonId = current.StorageAddonId;
+            current.StorageAddonId = payment.StorageAddonId;
+
             logger.LogInformation(
-                "Payment {PaymentId}: subscription {SubscriptionId} extended until {CurrentPeriodFinishesAt}, tokens now {SubscriptionTokensCount}",
+                "Payment {PaymentId}: subscription {SubscriptionId} extended until {CurrentPeriodFinishesAt}, tokens now {SubscriptionTokensCount}, storage add-on {PreviousStorageAddonId} -> {StorageAddonId}",
                 payment.Id,
                 current.Id,
                 current.CurrentPeriodFinishesAt,
-                balance.SubscriptionTokensCount);
+                balance.SubscriptionTokensCount,
+                previousStorageAddonId,
+                current.StorageAddonId);
         }
         else
         {
@@ -123,6 +130,7 @@ public class PaymentFulfillmentService(
                 Id = subscriptionId,
                 ServiceId = payment.ServiceId,
                 TariffId = tariff.Id,
+                StorageAddonId = payment.StorageAddonId,
                 OwnerId = payment.OwnerId,
                 PaidEntityId = payment.PaidEntityId,
                 Status = SubscriptionStatus.Active,
@@ -138,10 +146,11 @@ public class PaymentFulfillmentService(
             });
 
             logger.LogInformation(
-                "Payment {PaymentId}: subscription {SubscriptionId} created on tariff {TariffId} until {CurrentPeriodFinishesAt}, {SubscriptionTokensCount} tokens granted",
+                "Payment {PaymentId}: subscription {SubscriptionId} created on tariff {TariffId} with storage add-on {StorageAddonId} until {CurrentPeriodFinishesAt}, {SubscriptionTokensCount} tokens granted",
                 payment.Id,
                 subscriptionId,
                 tariff.Id,
+                payment.StorageAddonId,
                 GetPeriodFinish(now, tariff.BillingPeriod),
                 tariff.IncludedTokensCount);
         }

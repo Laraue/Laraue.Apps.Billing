@@ -166,5 +166,23 @@ namespace Laraue.Apps.Billing.Services.Resources {
                 return ResourceManager.GetString("PaymentNotificationMismatch", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Storage add-on &apos;{0}&apos; was not found or can&apos;t be bought with this item..
+        /// </summary>
+        internal static string StorageAddonNotAvailable {
+            get {
+                return ResourceManager.GetString("StorageAddonNotAvailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} bytes of storage are used, more than the {1} bytes the tariff and the add-on give..
+        /// </summary>
+        internal static string StorageOverLimit {
+            get {
+                return ResourceManager.GetString("StorageOverLimit", resourceCulture);
+            }
+        }
     }
 }

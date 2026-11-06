@@ -54,4 +54,10 @@
     <data name="PaymentNotificationMismatch" xml:space="preserve">
         <value>Payment notification does not match payment '{0}' (amount or currency).</value>
     </data>
+    <data name="StorageAddonNotAvailable" xml:space="preserve">
+        <value>Storage add-on '{0}' was not found or can't be bought with this item.</value>
+    </data>
+    <data name="StorageOverLimit" xml:space="preserve">
+        <value>{0} bytes of storage are used, more than the {1} bytes the tariff and the add-on give.</value>
+    </data>
 </root>

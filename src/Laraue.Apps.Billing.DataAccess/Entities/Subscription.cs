@@ -21,6 +21,12 @@ public class Subscription
     /// </summary>
     public Guid PaidEntityId { get; set; }
 
+    /// <summary>
+    /// Extra storage on top of the tariff's, paid together with it. Null when none was bought.
+    /// </summary>
+    public Guid? StorageAddonId { get; set; }
+    public StorageAddon? StorageAddon { get; set; }
+
     public int? Seats { get; set; }
     
     public SubscriptionStatus Status { get; set; }
