@@ -51,6 +51,20 @@ apps (`Laraue.Apps.Boards`) can reference it - see "NuGet publishing" below.
   (`TokenPacksController`/`TokenPackService`, public) returns the active ones, cheapest first, priced like
   the tariffs and only in a currency a registered provider charges in; a pack is bought through the same
   checkout as a plan (`PaymentKind.TokenPack`).
+- **Storage** (BRD-341) - a Boards tariff includes file storage (`IncludedStorageMegabytes` on
+  `LaraueBoardsPersonalTariff`/`LaraueBoardsTeamTariff`: 100 MB on Free, 1 GB on paid tariffs). A
+  `StorageAddon` (per service, `StorageMegabytes`, `Price` per month in USD cents: +10 GB $1, +50 GB $3) adds
+  to it, only with a paid tariff and only in that tariff's checkout: one payment, the tariff's price plus the
+  add-on's, converted as one sum (`Payment.StorageAddonId`). Paying sets `Subscription.StorageAddonId`: a
+  renewal of the same tariff switches to the add-on of its payment at once (a bigger one applies right away,
+  none removes it), a new tariff starts with it. The quota (tariff + add-on, in bytes, `StorageQuota`) goes to
+  Boards in `ActiveSubscriptionResponse` (`storage_quota_bytes`, `storage_addon_id`); Billing knows no usage,
+  Laraue.Apps.Storage counts it. A checkout may carry the customer's usage (`StorageCheckout.usage_bytes`):
+  when it's above the storage the tariff and add-on would give, no payment is created and the response has
+  `storage_over_limit` (usage and quota; `StorageOverLimitException` inside), so the customer can't move to
+  less storage than they use. A paid plan that lapses falls back to Free with its 100 MB; nothing is deleted.
+  `GET /api/tariffs` returns each Boards tariff's storage, `storageAddons` (their own prices) and, per paid
+  tariff, `storageAddonPrices` (the tariff with each add-on, priced as the checkout charges it).
 - `Subscription` - an active/cancelled paid plan tying a `PaidEntityId` (user or org id) to a
   `Tariff`, with an `OwnerId` (who's actually paying, which can differ from who's covered - e.g. an
   org admin paying for a team plan).
@@ -90,7 +104,7 @@ apps (`Laraue.Apps.Boards`) can reference it - see "NuGet publishing" below.
   purchased pack(s) and/or subscription pack it drew from via
   `TokenTransactionPurchasedTokenPack`/`TokenTransactionSubscriptionTokenPack`.
 
-All reference data (`Service`, `Tariff` + its per-service joins, `TokenPack`, `CurrencyRate`) is
+All reference data (`Service`, `Tariff` + its per-service joins, `TokenPack`, `StorageAddon`, `CurrencyRate`) is
 seeded via EF Core `HasData` in `DatabaseContext.OnModelCreating`, sourced from the static classes
 in `DataAccess/Data/*Data.cs` - there's no admin UI or seeding script; changing a tariff or adding a
 currency means editing the relevant `*Data.cs` class and adding a migration.
@@ -374,7 +388,8 @@ infrastructure and conventions:
 `.github/workflows/nuget-publish.yml` packs and pushes every packable project (`IsPackable=true` -
 currently only `Laraue.Apps.Billing.Internal.Contracts`) to NuGet.org via trusted publishing (OIDC,
 no stored API key - see `Laraue.Grpc`'s readme for how that mechanism works), separately from
-`dotnet.yml`'s build/test/deploy pipeline. It runs on **every branch push**, not just `main`:
+`dotnet.yml`'s build/test/deploy pipeline. It runs **only when started by hand** (`workflow_dispatch`, the
+Actions tab or `gh workflow run nuget-publish.yml --ref <branch>`), on whichever branch it's started from:
 
 - On `main`, it publishes the base `<Version>` from `Directory.Build.props` as-is.
 - On any other branch, it publishes `<Version>-alpha.<run number>` (e.g. `0.0.1-alpha.42`) instead -

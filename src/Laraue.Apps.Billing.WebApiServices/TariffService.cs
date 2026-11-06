@@ -43,16 +43,18 @@ public class TariffService(
         var currencyCode = paymentProviderRegistry.ResolveCurrency(request.CurrencyCode);
         var currencyRate = await currencyRateService.GetCurrencyRateAsync(currencyCode, cancellationToken);
 
+        var storageAddons = await GetStorageAddonsAsync(request.ServiceId, cancellationToken);
+
         var personalTariffs = request.ServiceId switch
         {
-            ServiceId.LaraueBoards => await GetLaraueBoardsPersonalTariffsAsync(currencyRate, cancellationToken),
+            ServiceId.LaraueBoards => await GetLaraueBoardsPersonalTariffsAsync(currencyRate, storageAddons, cancellationToken),
             ServiceId.MarkdownTranslator => await GetMarkdownTranslatorPersonalTariffsAsync(currencyRate, cancellationToken),
             _ => throw new InvalidOperationException($"Personal tariffs of service '{request.ServiceId}' are not mapped."),
         };
 
         var teamTariffs = request.ServiceId switch
         {
-            ServiceId.LaraueBoards => await GetLaraueBoardsTeamTariffsAsync(currencyRate, cancellationToken),
+            ServiceId.LaraueBoards => await GetLaraueBoardsTeamTariffsAsync(currencyRate, storageAddons, cancellationToken),
             // Markdown Translator only sells personal plans.
             ServiceId.MarkdownTranslator => [],
             _ => throw new InvalidOperationException($"Team tariffs of service '{request.ServiceId}' are not mapped."),
@@ -62,11 +64,52 @@ public class TariffService(
         {
             PersonalSubscriptions = personalTariffs,
             TeamSubscriptions = teamTariffs,
+            StorageAddons = storageAddons
+                .Select(x => new StorageAddonDto
+                {
+                    Id = x.Id,
+                    Title = x.Title,
+                    StorageMegabytes = x.StorageMegabytes,
+                    Price = currencyRateService.ConvertPrice(currencyRate, x.Price),
+                    CurrencyCode = currencyRate.Code,
+                    FormattedPrice = currencyRateService.FormatPrice(currencyRate, x.Price),
+                })
+                .ToList(),
         };
     }
 
+    private Task<List<StorageAddonRow>> GetStorageAddonsAsync(ServiceId serviceId, CancellationToken cancellationToken) =>
+        context.StorageAddons
+            .Where(x => x.ServiceId == serviceId && x.IsActive)
+            .OrderBy(x => x.Price)
+            .Select(x => new StorageAddonRow(x.Id, x.Title, x.StorageMegabytes, x.Price))
+            .ToListAsync(cancellationToken);
+
+    /// <summary>
+    /// What a paid tariff costs with each add-on, priced as one sum the way a checkout charges it - a sum
+    /// of the two converted prices could round differently. Empty for a free tariff, which takes none.
+    /// </summary>
+    private List<StorageAddonPrice> GetStorageAddonPrices(
+        CurrencyRate currencyRate,
+        int tariffPrice,
+        bool isFree,
+        List<StorageAddonRow> storageAddons) =>
+        isFree
+            ? []
+            : storageAddons
+                .Select(x => new StorageAddonPrice
+                {
+                    StorageAddonId = x.Id,
+                    Price = currencyRateService.ConvertPrice(currencyRate, tariffPrice + x.Price),
+                    FormattedPrice = currencyRateService.FormatPrice(currencyRate, tariffPrice + x.Price),
+                })
+                .ToList();
+
+    private sealed record StorageAddonRow(Guid Id, string Title, int StorageMegabytes, int Price);
+
     private async Task<List<PersonalSubscription>> GetLaraueBoardsPersonalTariffsAsync(
         CurrencyRate currencyRate,
+        List<StorageAddonRow> storageAddons,
         CancellationToken cancellationToken)
     {
         var rows = await context.LaraueBoardsPersonalTariffs
@@ -79,8 +122,10 @@ public class TariffService(
                 x.Tariff.Price,
                 x.Tariff.BillingPeriod,
                 x.Tariff.IncludedTokensCount,
+                x.Tariff.IsFree,
                 x.LimitIssuesPerMonth,
                 x.LimitFreeTeamOrganizationsCount,
+                x.IncludedStorageMegabytes,
             })
             .ToListAsync(cancellationToken);
 
@@ -98,6 +143,8 @@ public class TariffService(
                 IncludedTokensCount = x.IncludedTokensCount,
                 LimitIssuesPerMonth = x.LimitIssuesPerMonth,
                 LimitFreeTeamOrganizationsCount = x.LimitFreeTeamOrganizationsCount,
+                IncludedStorageMegabytes = x.IncludedStorageMegabytes,
+                StorageAddonPrices = GetStorageAddonPrices(currencyRate, x.Price, x.IsFree, storageAddons),
             })
             .ToList();
     }
@@ -138,6 +185,7 @@ public class TariffService(
 
     private async Task<List<TeamSubscription>> GetLaraueBoardsTeamTariffsAsync(
         CurrencyRate currencyRate,
+        List<StorageAddonRow> storageAddons,
         CancellationToken cancellationToken)
     {
         var rows = await context.LaraueBoardsTeamTariffs
@@ -150,7 +198,9 @@ public class TariffService(
                 x.Tariff.Price,
                 x.Tariff.BillingPeriod,
                 x.Tariff.IncludedTokensCount,
+                x.Tariff.IsFree,
                 x.LimitIssuesPerMonth,
+                x.IncludedStorageMegabytes,
             })
             .ToListAsync(cancellationToken);
 
@@ -166,6 +216,8 @@ public class TariffService(
                 BillingPeriod = x.BillingPeriod,
                 IncludedTokensCount = x.IncludedTokensCount,
                 LimitIssuesPerMonth = x.LimitIssuesPerMonth,
+                IncludedStorageMegabytes = x.IncludedStorageMegabytes,
+                StorageAddonPrices = GetStorageAddonPrices(currencyRate, x.Price, x.IsFree, storageAddons),
             })
             .ToList();
     }
@@ -192,6 +244,36 @@ public record GetServiceTariffsResponse
 {
     public required IList<PersonalSubscription> PersonalSubscriptions { get; set; }
     public required IList<TeamSubscription> TeamSubscriptions { get; set; }
+
+    /// <summary>
+    /// Extra storage sold with the service's paid tariffs, cheapest first. Empty for a service without
+    /// storage.
+    /// </summary>
+    public required IList<StorageAddonDto> StorageAddons { get; set; }
+}
+
+public record StorageAddonDto
+{
+    public required Guid Id { get; set; }
+    public required string Title { get; set; }
+    public required int StorageMegabytes { get; set; }
+
+    /// <summary>
+    /// The add-on's own price per month, for showing it apart from a tariff.
+    /// </summary>
+    public decimal Price { get; set; }
+    public required string CurrencyCode { get; set; }
+    public required string FormattedPrice { get; set; }
+}
+
+/// <summary>
+/// A paid tariff's price together with one storage add-on: what a checkout of both charges.
+/// </summary>
+public record StorageAddonPrice
+{
+    public required Guid StorageAddonId { get; set; }
+    public decimal Price { get; set; }
+    public required string FormattedPrice { get; set; }
 }
 
 public abstract record Subscription
@@ -221,6 +303,8 @@ public sealed record LaraueBoardsPersonalSubscription : PersonalSubscription
     public required long IncludedTokensCount { get; set; }
     public int? LimitIssuesPerMonth { get; set; }
     public int? LimitFreeTeamOrganizationsCount { get; set; }
+    public required int IncludedStorageMegabytes { get; set; }
+    public required IList<StorageAddonPrice> StorageAddonPrices { get; set; }
 }
 
 public sealed record MarkdownTranslatorPersonalSubscription : PersonalSubscription
@@ -240,4 +324,6 @@ public sealed record LaraueBoardsTeamSubscription : TeamSubscription
 {
     public required long IncludedTokensCount { get; set; }
     public int? LimitIssuesPerMonth { get; set; }
+    public required int IncludedStorageMegabytes { get; set; }
+    public required IList<StorageAddonPrice> StorageAddonPrices { get; set; }
 }

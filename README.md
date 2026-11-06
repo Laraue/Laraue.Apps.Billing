@@ -8,7 +8,7 @@ live here instead of being duplicated per app.
 
 ### Laraue.Apps.Billing.DataAccess
 EF Core `DatabaseContext`, entity models, migrations, and the static reference data (tariffs,
-currency rates, services, token packs) seeded via `HasData`.
+currency rates, services, token packs, storage add-ons) seeded via `HasData`.
 
 ### Laraue.Apps.Billing.Internal.Contracts
 The gRPC contract other apps call directly: `subscription.proto`

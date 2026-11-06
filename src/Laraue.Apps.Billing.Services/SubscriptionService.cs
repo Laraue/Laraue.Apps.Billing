@@ -409,6 +409,9 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                     s.Tariff.IncludedTokensCount,
                     t.LimitIssuesPerMonth,
                     t.LimitFreeTeamOrganizationsCount,
+                    t.IncludedStorageMegabytes,
+                    s.StorageAddonId,
+                    AddonStorageMegabytes = (int?)s.StorageAddon!.StorageMegabytes,
                 })
             .SingleAsync(cancellationToken);
 
@@ -419,6 +422,9 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                 LimitIssuesPerMonth = row.LimitIssuesPerMonth,
                 LimitFreeTeamOrganizationsCount = row.LimitFreeTeamOrganizationsCount,
                 IncludedTokensCount = row.IncludedTokensCount,
+                StorageQuotaBytes = StorageQuota.ToBytes(row.IncludedStorageMegabytes)
+                    + StorageQuota.ToBytes(row.AddonStorageMegabytes ?? 0),
+                StorageAddonId = row.StorageAddonId,
             },
             subscriptionId,
             cancellationToken);
@@ -441,6 +447,9 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                     s.Tariff!.Title,
                     s.Tariff.IncludedTokensCount,
                     t.LimitIssuesPerMonth,
+                    t.IncludedStorageMegabytes,
+                    s.StorageAddonId,
+                    AddonStorageMegabytes = (int?)s.StorageAddon!.StorageMegabytes,
                 })
             .SingleAsync(cancellationToken);
 
@@ -450,6 +459,9 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                 Code = row.Title,
                 LimitIssuesPerMonth = row.LimitIssuesPerMonth,
                 IncludedTokensCount = row.IncludedTokensCount,
+                StorageQuotaBytes = StorageQuota.ToBytes(row.IncludedStorageMegabytes)
+                    + StorageQuota.ToBytes(row.AddonStorageMegabytes ?? 0),
+                StorageAddonId = row.StorageAddonId,
             },
             subscriptionId,
             cancellationToken);
@@ -522,12 +534,26 @@ public sealed record LaraueBoardsPersonalActiveSubscription : ActiveSubscription
     public int? LimitIssuesPerMonth { get; set; }
     public int? LimitFreeTeamOrganizationsCount { get; set; }
     public required long IncludedTokensCount { get; set; }
+
+    /// <summary>
+    /// The file storage of the user's personal organization: the tariff's plus the add-on's, in bytes.
+    /// </summary>
+    public required long StorageQuotaBytes { get; set; }
+
+    public Guid? StorageAddonId { get; set; }
 }
 
 public sealed record LaraueBoardsTeamActiveSubscription : ActiveSubscription
 {
     public int? LimitIssuesPerMonth { get; set; }
     public required long IncludedTokensCount { get; set; }
+
+    /// <summary>
+    /// The organization's file storage: the tariff's plus the add-on's, in bytes.
+    /// </summary>
+    public required long StorageQuotaBytes { get; set; }
+
+    public Guid? StorageAddonId { get; set; }
 }
 
 public sealed record MarkdownTranslatorActiveSubscription : ActiveSubscription
