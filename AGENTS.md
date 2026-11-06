@@ -388,7 +388,8 @@ infrastructure and conventions:
 `.github/workflows/nuget-publish.yml` packs and pushes every packable project (`IsPackable=true` -
 currently only `Laraue.Apps.Billing.Internal.Contracts`) to NuGet.org via trusted publishing (OIDC,
 no stored API key - see `Laraue.Grpc`'s readme for how that mechanism works), separately from
-`dotnet.yml`'s build/test/deploy pipeline. It runs on **every branch push**, not just `main`:
+`dotnet.yml`'s build/test/deploy pipeline. It runs **only when started by hand** (`workflow_dispatch`, the
+Actions tab or `gh workflow run nuget-publish.yml --ref <branch>`), on whichever branch it's started from:
 
 - On `main`, it publishes the base `<Version>` from `Directory.Build.props` as-is.
 - On any other branch, it publishes `<Version>-alpha.<run number>` (e.g. `0.0.1-alpha.42`) instead -
