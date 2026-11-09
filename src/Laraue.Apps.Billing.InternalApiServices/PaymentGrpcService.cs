@@ -29,7 +29,8 @@ public sealed class PaymentGrpcService(ICorePaymentService corePaymentService)
             request.Kind,
             request.ItemId,
             request.CurrencyCode,
-            request.ReturnUrl);
+            request.ReturnUrl,
+            request.Storage);
     }
 
     public override Task<Internal.Contracts.CreateCheckoutResponse> CreateOrganizationCheckout(
@@ -44,7 +45,8 @@ public sealed class PaymentGrpcService(ICorePaymentService corePaymentService)
             request.Kind,
             request.ItemId,
             request.CurrencyCode,
-            request.ReturnUrl);
+            request.ReturnUrl,
+            request.Storage);
     }
 
     private async Task<Internal.Contracts.CreateCheckoutResponse> CreateCheckoutAsync(
@@ -55,21 +57,42 @@ public sealed class PaymentGrpcService(ICorePaymentService corePaymentService)
         Internal.Contracts.PaymentItemKind kind,
         string itemId,
         string currencyCode,
-        string returnUrl)
+        string returnUrl,
+        Internal.Contracts.StorageCheckout? storage)
     {
-        var checkout = await corePaymentService.CreateAsync(
-            new CreatePaymentRequest
+        PaymentCheckout checkout;
+        try
+        {
+            checkout = await corePaymentService.CreateAsync(
+                new CreatePaymentRequest
+                {
+                    ServiceId = GrpcParsing.ReadDomainServiceId(context),
+                    Kind = ToDomainKind(kind),
+                    ItemId = GrpcParsing.ParseGuid(itemId, nameof(itemId)),
+                    PaidEntityId = paidEntityId,
+                    IsOrganization = isOrganization,
+                    OwnerId = ownerId,
+                    CurrencyCode = currencyCode,
+                    ReturnUrl = string.IsNullOrEmpty(returnUrl) ? null : returnUrl,
+                    StorageAddonId = string.IsNullOrEmpty(storage?.AddonId)
+                        ? null
+                        : GrpcParsing.ParseGuid(storage.AddonId, nameof(storage.AddonId)),
+                    StorageUsageBytes = storage is { HasUsageBytes: true } ? storage.UsageBytes : null,
+                },
+                context.CancellationToken);
+        }
+        catch (StorageOverLimitException ex)
+        {
+            // An expected answer, not an error: the caller tells the customer how much to delete.
+            return new Internal.Contracts.CreateCheckoutResponse
             {
-                ServiceId = GrpcParsing.ReadDomainServiceId(context),
-                Kind = ToDomainKind(kind),
-                ItemId = GrpcParsing.ParseGuid(itemId, nameof(itemId)),
-                PaidEntityId = paidEntityId,
-                IsOrganization = isOrganization,
-                OwnerId = ownerId,
-                CurrencyCode = currencyCode,
-                ReturnUrl = string.IsNullOrEmpty(returnUrl) ? null : returnUrl,
-            },
-            context.CancellationToken);
+                StorageOverLimit = new Internal.Contracts.StorageOverLimit
+                {
+                    UsageBytes = ex.UsageBytes,
+                    QuotaBytes = ex.QuotaBytes,
+                },
+            };
+        }
 
         return new Internal.Contracts.CreateCheckoutResponse
         {

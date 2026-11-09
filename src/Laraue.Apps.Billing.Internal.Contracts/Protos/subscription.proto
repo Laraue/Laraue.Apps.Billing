@@ -58,11 +58,19 @@ message LaraueBoardsPersonalSubscription {
   optional int32 limit_issues_per_month = 1;
   optional int32 limit_free_team_organizations_count = 2;
   int64 included_tokens_count = 3;
+  // The user's file storage (their personal organization's): the tariff's plus the add-on's.
+  int64 storage_quota_bytes = 4;
+  // The storage add-on the subscription has. Empty for none.
+  string storage_addon_id = 5;
 }
 
 message LaraueBoardsTeamSubscription {
   optional int32 limit_issues_per_month = 1;
   int64 included_tokens_count = 2;
+  // The organization's file storage: the tariff's plus the add-on's.
+  int64 storage_quota_bytes = 3;
+  // The storage add-on the subscription has. Empty for none.
+  string storage_addon_id = 4;
 }
 
 message MarkdownTranslatorSubscription {

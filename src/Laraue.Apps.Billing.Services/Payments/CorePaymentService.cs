@@ -80,6 +80,18 @@ public sealed record CreatePaymentRequest
     public string? ProviderCode { get; init; }
 
     public string? ReturnUrl { get; init; }
+
+    /// <summary>
+    /// A storage add-on bought with a <see cref="PaymentKind.Subscription"/> tariff, charged in the same
+    /// payment. Null for none.
+    /// </summary>
+    public Guid? StorageAddonId { get; init; }
+
+    /// <summary>
+    /// The covered entity's current storage usage, when the calling service knows it. A checkout that
+    /// would give less storage than this is refused with <see cref="StorageOverLimitException"/>.
+    /// </summary>
+    public long? StorageUsageBytes { get; init; }
 }
 
 public sealed record PaymentCheckout(Guid PaymentId, string Url);
@@ -91,6 +103,7 @@ public class CorePaymentService(
     IPaymentProviderRegistry providerRegistry,
     IPaymentFulfillment fulfillment,
     IDateTimeProvider dateTimeProvider,
+    IStorageQuotaService storageQuotaService,
     BillingMetrics metrics,
     ILogger<CorePaymentService> logger) : ICorePaymentService
 {
@@ -134,6 +147,11 @@ public class CorePaymentService(
             request.ItemId,
             item.Title,
             item.PriceInUsdCents);
+
+        if (request.StorageAddonId is not null || request.StorageUsageBytes is not null)
+        {
+            item = await AddStorageAsync(request, item, cancellationToken);
+        }
 
         var currencyRate = await GetCurrencyRateAsync(currencyCode, cancellationToken);
 
@@ -202,6 +220,7 @@ public class CorePaymentService(
             OwnerId = request.OwnerId,
             TariffId = request.Kind == PaymentKind.Subscription ? request.ItemId : null,
             TokenPackId = request.Kind == PaymentKind.TokenPack ? request.ItemId : null,
+            StorageAddonId = request.StorageAddonId,
             AmountMinorUnits = amountMinorUnits,
             CurrencyCode = currencyCode,
             Status = PaymentStatus.Pending,
@@ -550,6 +569,75 @@ public class CorePaymentService(
             .Where(x => x.Id == request.ItemId && x.IsActive && !x.IsFree)
             .Select(x => new PaymentItem(x.Title, x.Price))
             .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Adds the storage add-on to a subscription's price and title, and refuses a checkout that would give
+    /// less storage than the customer already uses. An add-on is only sold with a paid tariff of its own
+    /// service, which <see cref="GetTariffItemAsync"/> has already checked.
+    /// </summary>
+    private async Task<PaymentItem> AddStorageAsync(
+        CreatePaymentRequest request,
+        PaymentItem item,
+        CancellationToken cancellationToken)
+    {
+        var addon = request.StorageAddonId is null
+            ? null
+            : await context.StorageAddons
+                .Where(x => x.Id == request.StorageAddonId && x.ServiceId == request.ServiceId && x.IsActive)
+                .Select(x => new { x.Title, x.Price })
+                .SingleOrDefaultAsync(cancellationToken);
+
+        var addonFound = request.StorageAddonId is null || addon is not null;
+
+        // Null for a tariff without storage (another service's) and for a token pack.
+        var quotaBytes = request.Kind == PaymentKind.Subscription && addonFound
+            ? await storageQuotaService.GetLaraueBoardsQuotaBytesAsync(
+                request.ItemId,
+                request.StorageAddonId,
+                cancellationToken)
+            : null;
+
+        if (quotaBytes is null)
+        {
+            logger.LogWarning(
+                "Payment refused: storage add-on {StorageAddonId} is not available with {Kind} {ItemId} of service {ServiceId}",
+                request.StorageAddonId,
+                request.Kind,
+                request.ItemId,
+                request.ServiceId);
+
+            throw new BadRequestException(
+                nameof(request.StorageAddonId),
+                string.Format(Errors.StorageAddonNotAvailable, request.StorageAddonId));
+        }
+
+        if (request.StorageUsageBytes is { } usageBytes && usageBytes > quotaBytes)
+        {
+            logger.LogWarning(
+                "Payment refused: paid entity {PaidEntityId} uses {UsageBytes} bytes, more than the {QuotaBytes} bytes of {ItemId} with storage add-on {StorageAddonId}",
+                request.PaidEntityId,
+                usageBytes,
+                quotaBytes,
+                request.ItemId,
+                request.StorageAddonId);
+
+            throw new StorageOverLimitException(usageBytes, quotaBytes.Value);
+        }
+
+        if (addon is null)
+        {
+            return item;
+        }
+
+        logger.LogInformation(
+            "Payment item {ItemId}: storage add-on {StorageAddonId} '{AddonTitle}' added, {AddonPriceInUsdCents} USD cents",
+            request.ItemId,
+            request.StorageAddonId,
+            addon.Title,
+            addon.Price);
+
+        return new PaymentItem($"{item.Title} {addon.Title}", item.PriceInUsdCents + addon.Price);
     }
 
     private sealed record PaymentItem(string Title, int PriceInUsdCents);

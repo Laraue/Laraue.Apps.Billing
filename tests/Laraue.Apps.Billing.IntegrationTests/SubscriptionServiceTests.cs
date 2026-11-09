@@ -20,7 +20,7 @@ public class SubscriptionServiceTests : BillingIntegrationTest
     {
         _host = host;
         _dateTimeProvider = new FakeDateTimeProvider(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
-        _subscriptionService = new SubscriptionService(Context, _dateTimeProvider);
+        _subscriptionService = new SubscriptionService(Context, _dateTimeProvider, new StorageQuotaService(Context));
     }
 
     [Fact]
@@ -382,7 +382,9 @@ public class SubscriptionServiceTests : BillingIntegrationTest
         using var otherScope = _host.Services.CreateScope();
         var otherContext = otherScope.ServiceProvider.GetRequiredService<DatabaseContext>();
         var otherSubscriptionService = new SubscriptionService(
-            otherContext, new FakeDateTimeProvider(_dateTimeProvider.UtcNow));
+            otherContext,
+            new FakeDateTimeProvider(_dateTimeProvider.UtcNow),
+            new StorageQuotaService(otherContext));
 
         // Both calls are the *first ever* lookup for this userId - without PgAdvisoryXactLock
         // guarding provisioning, both could see "no subscription yet" concurrently and each insert
@@ -421,7 +423,10 @@ public class SubscriptionServiceTests : BillingIntegrationTest
             await Task.WhenAll(scopes.Select(scope =>
             {
                 var scopeContext = scope.ServiceProvider.GetRequiredService<DatabaseContext>();
-                var scopeService = new SubscriptionService(scopeContext, new FakeDateTimeProvider(renewalTime));
+                var scopeService = new SubscriptionService(
+                    scopeContext,
+                    new FakeDateTimeProvider(renewalTime),
+                    new StorageQuotaService(scopeContext));
 
                 return scopeContext.Database.InTransactionAsync(() => scopeService.GetOrCreateActivePersonalSubscriptionIdAsync(
                     ServiceId.LaraueBoards, userId, CancellationToken.None));

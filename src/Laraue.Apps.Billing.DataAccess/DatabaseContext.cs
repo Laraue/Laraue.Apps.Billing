@@ -26,6 +26,7 @@ public class DatabaseContext : DbContext, IJobsDbContext
     public required DbSet<LaraueBoardsTeamTariff> LaraueBoardsTeamTariffs { get; set; }
     public required DbSet<MarkdownTranslatorPersonalTariff> MarkdownTranslatorPersonalTariffs { get; set; }
     public required DbSet<TokenPack> TokenPacks { get; set; }
+    public required DbSet<StorageAddon> StorageAddons { get; set; }
     public required DbSet<CurrencyRate> CurrencyRates { get; set; }
     public required DbSet<Service> Services { get; set; }
 
@@ -105,6 +106,15 @@ public class DatabaseContext : DbContext, IJobsDbContext
         modelBuilder.Entity<TokenPack>()
             .HasData(TokenPacksData.Packs);
         
+        modelBuilder.Entity<StorageAddon>()
+            .HasData(StorageAddonsData.Addons);
+
+        modelBuilder.Entity<Subscription>()
+            .HasOne(x => x.StorageAddon)
+            .WithMany()
+            .HasForeignKey(x => x.StorageAddonId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         modelBuilder.Entity<CurrencyRate>()
             .HasData(CurrencyRatesData.CurrencyRates);
 
@@ -151,6 +161,12 @@ public class DatabaseContext : DbContext, IJobsDbContext
                 .HasOne<TokenPack>()
                 .WithMany()
                 .HasForeignKey(x => x.TokenPackId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            builder
+                .HasOne<StorageAddon>()
+                .WithMany()
+                .HasForeignKey(x => x.StorageAddonId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             // A provider's notification finds the payment by its own reference. Rows without a

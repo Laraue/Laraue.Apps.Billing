@@ -25,6 +25,7 @@ public static class ServiceCollectionExtensions
                 .Bind(configuration.GetSection(PaymentsOptions.SectionName))
                 .ValidateDataAnnotations();
 
+            services.TryAddScoped<IStorageQuotaService, StorageQuotaService>();
             services.TryAddSingleton<IPaymentProviderRegistry, PaymentProviderRegistry>();
             services.TryAddScoped<IPaymentFulfillment, PaymentFulfillmentService>();
             services.TryAddScoped<ICorePaymentService, CorePaymentService>();

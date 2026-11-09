@@ -35,6 +35,8 @@ message CreatePersonalCheckoutRequest {
   string currency_code = 4;
   // Where to return the customer after paying, when the provider supports it. Optional.
   string return_url = 5;
+  // A storage add-on bought with the tariff, see StorageCheckout. Optional.
+  StorageCheckout storage = 6;
 }
 
 message CreateOrganizationCheckoutRequest {
@@ -46,10 +48,35 @@ message CreateOrganizationCheckoutRequest {
   string item_id = 4;
   string currency_code = 5;
   string return_url = 6;
+  // A storage add-on bought with the tariff, see StorageCheckout. Optional.
+  StorageCheckout storage = 7;
+}
+
+// Storage bought with a subscription. Only for PAYMENT_ITEM_KIND_SUBSCRIPTION of a paid tariff; with
+// a token pack it is INVALID_ARGUMENT. The add-on is charged in the same payment as the tariff (one
+// price: the tariff's plus the add-on's) and applies when the payment is fulfilled. The subscription
+// keeps the add-on of its last payment, so paying without one removes it.
+message StorageCheckout {
+  // The add-on's id. Empty for no add-on.
+  string addon_id = 1;
+  // The caller's current storage usage of the covered user or organization. When set and above the
+  // storage the tariff and add-on would give, no payment is created: the response has
+  // storage_over_limit instead, so a customer can't move to less storage than they already use.
+  optional int64 usage_bytes = 2;
 }
 
 message CreateCheckoutResponse {
+  // Empty when storage_over_limit is set.
   string payment_id = 1;
-  // The address to send the customer to in order to pay.
+  // The address to send the customer to in order to pay. Empty when storage_over_limit is set.
   string url = 2;
+  // Set when nothing was created because the usage passed in StorageCheckout is above the storage
+  // the tariff and add-on would give.
+  StorageOverLimit storage_over_limit = 3;
+}
+
+message StorageOverLimit {
+  int64 usage_bytes = 1;
+  // The storage the tariff and add-on would give.
+  int64 quota_bytes = 2;
 }

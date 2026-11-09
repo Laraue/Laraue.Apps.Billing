@@ -57,7 +57,10 @@ public interface ISubscriptionService
 /// Every method can provision a Free subscription, so each needs a database transaction started by
 /// the caller (the host), which commits it. The service never opens one itself.
 /// </remarks>
-public class SubscriptionService(DatabaseContext context, IDateTimeProvider dateTimeProvider) : ISubscriptionService
+public class SubscriptionService(
+    DatabaseContext context,
+    IDateTimeProvider dateTimeProvider,
+    IStorageQuotaService storageQuotaService) : ISubscriptionService
 {
     /// <summary>
     /// How long the period of a Free plan lasts.
@@ -409,6 +412,9 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                     s.Tariff.IncludedTokensCount,
                     t.LimitIssuesPerMonth,
                     t.LimitFreeTeamOrganizationsCount,
+                    t.IncludedStorageMegabytes,
+                    s.StorageAddonId,
+                    AddonStorageMegabytes = (int?)s.StorageAddon!.StorageMegabytes,
                 })
             .SingleAsync(cancellationToken);
 
@@ -419,6 +425,10 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                 LimitIssuesPerMonth = row.LimitIssuesPerMonth,
                 LimitFreeTeamOrganizationsCount = row.LimitFreeTeamOrganizationsCount,
                 IncludedTokensCount = row.IncludedTokensCount,
+                StorageQuotaBytes = storageQuotaService.GetQuotaBytes(
+                    row.IncludedStorageMegabytes,
+                    row.AddonStorageMegabytes),
+                StorageAddonId = row.StorageAddonId,
             },
             subscriptionId,
             cancellationToken);
@@ -441,6 +451,9 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                     s.Tariff!.Title,
                     s.Tariff.IncludedTokensCount,
                     t.LimitIssuesPerMonth,
+                    t.IncludedStorageMegabytes,
+                    s.StorageAddonId,
+                    AddonStorageMegabytes = (int?)s.StorageAddon!.StorageMegabytes,
                 })
             .SingleAsync(cancellationToken);
 
@@ -450,6 +463,10 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                 Code = row.Title,
                 LimitIssuesPerMonth = row.LimitIssuesPerMonth,
                 IncludedTokensCount = row.IncludedTokensCount,
+                StorageQuotaBytes = storageQuotaService.GetQuotaBytes(
+                    row.IncludedStorageMegabytes,
+                    row.AddonStorageMegabytes),
+                StorageAddonId = row.StorageAddonId,
             },
             subscriptionId,
             cancellationToken);
@@ -522,12 +539,26 @@ public sealed record LaraueBoardsPersonalActiveSubscription : ActiveSubscription
     public int? LimitIssuesPerMonth { get; set; }
     public int? LimitFreeTeamOrganizationsCount { get; set; }
     public required long IncludedTokensCount { get; set; }
+
+    /// <summary>
+    /// The file storage of the user's personal organization: the tariff's plus the add-on's, in bytes.
+    /// </summary>
+    public required long StorageQuotaBytes { get; set; }
+
+    public Guid? StorageAddonId { get; set; }
 }
 
 public sealed record LaraueBoardsTeamActiveSubscription : ActiveSubscription
 {
     public int? LimitIssuesPerMonth { get; set; }
     public required long IncludedTokensCount { get; set; }
+
+    /// <summary>
+    /// The organization's file storage: the tariff's plus the add-on's, in bytes.
+    /// </summary>
+    public required long StorageQuotaBytes { get; set; }
+
+    public Guid? StorageAddonId { get; set; }
 }
 
 public sealed record MarkdownTranslatorActiveSubscription : ActiveSubscription

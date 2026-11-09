@@ -40,6 +40,12 @@ public class Payment
     public Guid? TokenPackId { get; set; }
 
     /// <summary>
+    /// The storage add-on bought with the tariff, when <see cref="Kind"/> is
+    /// <see cref="PaymentKind.Subscription"/>. Its price is part of <see cref="AmountMinorUnits"/>.
+    /// </summary>
+    public Guid? StorageAddonId { get; set; }
+
+    /// <summary>
     /// The amount in the currency's minor units (e.g. kopecks, cents), so no floating point is
     /// involved. Fixed when the payment is created.
     /// </summary>
