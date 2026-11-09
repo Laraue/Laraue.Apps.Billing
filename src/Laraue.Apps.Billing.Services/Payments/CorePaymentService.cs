@@ -103,6 +103,7 @@ public class CorePaymentService(
     IPaymentProviderRegistry providerRegistry,
     IPaymentFulfillment fulfillment,
     IDateTimeProvider dateTimeProvider,
+    IStorageQuotaService storageQuotaService,
     BillingMetrics metrics,
     ILogger<CorePaymentService> logger) : ICorePaymentService
 {
@@ -591,8 +592,7 @@ public class CorePaymentService(
 
         // Null for a tariff without storage (another service's) and for a token pack.
         var quotaBytes = request.Kind == PaymentKind.Subscription && addonFound
-            ? await StorageQuota.GetLaraueBoardsQuotaBytesAsync(
-                context,
+            ? await storageQuotaService.GetLaraueBoardsQuotaBytesAsync(
                 request.ItemId,
                 request.StorageAddonId,
                 cancellationToken)

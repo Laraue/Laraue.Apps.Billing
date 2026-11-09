@@ -57,7 +57,10 @@ public interface ISubscriptionService
 /// Every method can provision a Free subscription, so each needs a database transaction started by
 /// the caller (the host), which commits it. The service never opens one itself.
 /// </remarks>
-public class SubscriptionService(DatabaseContext context, IDateTimeProvider dateTimeProvider) : ISubscriptionService
+public class SubscriptionService(
+    DatabaseContext context,
+    IDateTimeProvider dateTimeProvider,
+    IStorageQuotaService storageQuotaService) : ISubscriptionService
 {
     /// <summary>
     /// How long the period of a Free plan lasts.
@@ -422,8 +425,9 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                 LimitIssuesPerMonth = row.LimitIssuesPerMonth,
                 LimitFreeTeamOrganizationsCount = row.LimitFreeTeamOrganizationsCount,
                 IncludedTokensCount = row.IncludedTokensCount,
-                StorageQuotaBytes = StorageQuota.ToBytes(row.IncludedStorageMegabytes)
-                    + StorageQuota.ToBytes(row.AddonStorageMegabytes ?? 0),
+                StorageQuotaBytes = storageQuotaService.GetQuotaBytes(
+                    row.IncludedStorageMegabytes,
+                    row.AddonStorageMegabytes),
                 StorageAddonId = row.StorageAddonId,
             },
             subscriptionId,
@@ -459,8 +463,9 @@ public class SubscriptionService(DatabaseContext context, IDateTimeProvider date
                 Code = row.Title,
                 LimitIssuesPerMonth = row.LimitIssuesPerMonth,
                 IncludedTokensCount = row.IncludedTokensCount,
-                StorageQuotaBytes = StorageQuota.ToBytes(row.IncludedStorageMegabytes)
-                    + StorageQuota.ToBytes(row.AddonStorageMegabytes ?? 0),
+                StorageQuotaBytes = storageQuotaService.GetQuotaBytes(
+                    row.IncludedStorageMegabytes,
+                    row.AddonStorageMegabytes),
                 StorageAddonId = row.StorageAddonId,
             },
             subscriptionId,

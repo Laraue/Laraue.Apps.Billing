@@ -29,7 +29,7 @@ public class BillingMetricsTests : BillingIntegrationTest
     {
         _host = host;
         var dateTimeProvider = new DateTimeProvider();
-        _tokenService = new TokenService(Context, new SubscriptionService(Context, dateTimeProvider), dateTimeProvider, Metrics);
+        _tokenService = new TokenService(Context, new SubscriptionService(Context, dateTimeProvider, new StorageQuotaService(Context)), dateTimeProvider, Metrics);
     }
 
     [Fact]

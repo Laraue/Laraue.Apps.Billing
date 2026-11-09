@@ -57,7 +57,7 @@ apps (`Laraue.Apps.Boards`) can reference it - see "NuGet publishing" below.
   to it, only with a paid tariff and only in that tariff's checkout: one payment, the tariff's price plus the
   add-on's, converted as one sum (`Payment.StorageAddonId`). Paying sets `Subscription.StorageAddonId`: a
   renewal of the same tariff switches to the add-on of its payment at once (a bigger one applies right away,
-  none removes it), a new tariff starts with it. The quota (tariff + add-on, in bytes, `StorageQuota`) goes to
+  none removes it), a new tariff starts with it. The quota (tariff + add-on, in bytes, `IStorageQuotaService`) goes to
   Boards in `ActiveSubscriptionResponse` (`storage_quota_bytes`, `storage_addon_id`); Billing knows no usage,
   Laraue.Apps.Storage counts it. A checkout may carry the customer's usage (`StorageCheckout.usage_bytes`):
   when it's above the storage the tariff and add-on would give, no payment is created and the response has

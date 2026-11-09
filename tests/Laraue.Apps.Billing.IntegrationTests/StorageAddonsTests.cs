@@ -37,7 +37,7 @@ public class StorageAddonsTests : BillingIntegrationTest
             Context,
             dateTimeProvider,
             NullLogger<PaymentFulfillmentService>.Instance);
-        _subscriptionService = new SubscriptionService(Context, dateTimeProvider);
+        _subscriptionService = new SubscriptionService(Context, dateTimeProvider, new StorageQuotaService(Context));
     }
 
     [Fact]

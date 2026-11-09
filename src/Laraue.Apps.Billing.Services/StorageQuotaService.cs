@@ -7,18 +7,31 @@ namespace Laraue.Apps.Billing.Services;
 /// The file storage a subscription gives: its tariff's included storage plus its add-on's. Tariffs and
 /// add-ons keep sizes in megabytes; callers get bytes.
 /// </summary>
-public static class StorageQuota
+public interface IStorageQuotaService
 {
-    private const long BytesPerMegabyte = 1024L * 1024L;
-
-    public static long ToBytes(int megabytes) => megabytes * BytesPerMegabyte;
+    /// <summary>
+    /// The quota in bytes of a tariff's storage and an add-on's, both in megabytes (null for no add-on).
+    /// </summary>
+    long GetQuotaBytes(int tariffMegabytes, int? addonMegabytes);
 
     /// <summary>
     /// The storage of a Laraue Boards tariff (personal or team) with an optional add-on, in bytes. Null
     /// when the tariff isn't a Laraue Boards one, so it has no storage.
     /// </summary>
-    public static async Task<long?> GetLaraueBoardsQuotaBytesAsync(
-        DatabaseContext context,
+    Task<long?> GetLaraueBoardsQuotaBytesAsync(
+        Guid tariffId,
+        Guid? storageAddonId,
+        CancellationToken cancellationToken);
+}
+
+public class StorageQuotaService(DatabaseContext context) : IStorageQuotaService
+{
+    private const long BytesPerMegabyte = 1024L * 1024L;
+
+    public long GetQuotaBytes(int tariffMegabytes, int? addonMegabytes) =>
+        (tariffMegabytes + (long)(addonMegabytes ?? 0)) * BytesPerMegabyte;
+
+    public async Task<long?> GetLaraueBoardsQuotaBytesAsync(
         Guid tariffId,
         Guid? storageAddonId,
         CancellationToken cancellationToken)
@@ -38,12 +51,12 @@ public static class StorageQuota
         }
 
         var addonMegabytes = storageAddonId is null
-            ? 0
+            ? (int?)null
             : await context.StorageAddons
                 .Where(x => x.Id == storageAddonId)
                 .Select(x => x.StorageMegabytes)
                 .SingleAsync(cancellationToken);
 
-        return ToBytes(tariffMegabytes.Value) + ToBytes(addonMegabytes);
+        return GetQuotaBytes(tariffMegabytes.Value, addonMegabytes);
     }
 }
